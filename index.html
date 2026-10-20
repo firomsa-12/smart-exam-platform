@@ -30,6 +30,8 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
+.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
+.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
 </style>
 </head>
 <body>
@@ -53,8 +55,19 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <p id="welcome"></p>
 <div class="info">Total Questions available: <strong id="count">0</strong></div>
 
+<!-- SUBJECT AND TOPIC RESTORED HERE -->
+<label for="quizSubject">Subject</label>
+<select id="quizSubject">
+<option value="All">All subjects</option>
+<option>Physics</option><option>Chemistry</option><option>Biology</option>
+<option>Mathematics</option><option>English</option><option>General</option>
+</select>
+
 <label for="quizSet">Exam Set (Document)</label>
 <select id="quizSet"><option value="All">All Sets</option></select>
+
+<label for="quizTopic">Topic</label>
+<select id="quizTopic"><option value="All">All topics</option></select>
 
 <label for="examLimit">Number of questions for this session (Leave empty for all)</label>
 <input id="examLimit" type="number" min="1" placeholder="e.g. 20">
@@ -78,6 +91,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 </select>
 <label>Set Name</label>
 <input id="addSet" placeholder="e.g., Kinematics Manual">
+<label>Topic</label>
+<input id="addTopic" placeholder="e.g., Cell Biology">
 <label>Duration (minutes)</label>
 <input id="duration" type="number" min="1" max="600" value="30">
 <button id="saveDurationBtn" class="secondary">Save Time Limit</button>
@@ -101,13 +116,19 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <section id="importPage" class="card hidden">
 <h2>Import Questions</h2>
-<label>Default subject</label>
+<!-- SUBJECT RESTORED HERE FOR IMPORTING -->
+<label>Default subject for imported questions</label>
 <select id="importSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
+
 <label>Document / Set Name</label>
 <input id="importSetName" placeholder="e.g., Kinematics Test 1">
+
+<label>Default Topic</label>
+<input id="importTopic" placeholder="e.g., Cell Biology">
+
 <p class="small">This imports the questions. If they don't have answers, go to "Apply Answer Key" on the menu.</p>
 <label>Paste JSON questions</label>
 <textarea id="jsonText" placeholder="Paste JSON here"></textarea>
@@ -172,6 +193,8 @@ const MINUTES_KEY = "smartExamFixedMinutes";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeSet(value){ return String(value || "").trim() || "Default Set"; }
+function normalizeTopic(value){ return String(value || "").trim() || "General"; }
+
 function normalizeAnswer(value){
   if(value === null || value === undefined) return null;
   if(typeof value === "number" && value >= 0 && value <= 3) return value;
@@ -183,7 +206,7 @@ function normalizeAnswer(value){
 
 try{
   const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
-  if(Array.isArray(saved)) questions = saved.filter(q => q && q.question).map(q => ({...q, subject: normalizeSubject(q.subject), setName: normalizeSet(q.setName)}));
+  if(Array.isArray(saved)) questions = saved.filter(q => q && q.question).map(q => ({...q, subject: normalizeSubject(q.subject), setName: normalizeSet(q.setName), topic: normalizeTopic(q.topic)}));
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
   if(savedMinutes >= 1) minutes = savedMinutes;
 }catch(e){}
@@ -191,6 +214,7 @@ try{
 function saveQuestions(){
   localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
   updateCount();
+  refreshDropdowns();
 }
 function updateCount(){ $("count").textContent = questions.length; }
 
@@ -214,7 +238,12 @@ function login(){
 $("saveQuestionBtn").onclick = function() {
   const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
   if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
-  questions.push({question:q, options:opts, answer:Number($("correct").value), subject:normalizeSubject($("addSubject").value), setName:normalizeSet($("addSet").value)});
+  questions.push({
+    question:q, options:opts, answer:Number($("correct").value), 
+    subject:normalizeSubject($("addSubject").value), 
+    setName:normalizeSet($("addSet").value), 
+    topic:normalizeTopic($("addTopic").value)
+  });
   saveQuestions(); $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); $("addMessage").textContent = "Question saved!";
 };
 
@@ -224,35 +253,21 @@ $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage")
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
 
-/* NEW FEATURE: APPLY ANSWER KEY */
 $("applyKeyBtn").onclick = function() {
     const setName = normalizeSet($("keySetName").value);
     const keyText = $("keyText").value;
-    
     if(!keyText.trim()) { $("keyMessage").textContent = "Please paste the answer key."; return; }
-    
-    // Extract answers like "1. A" or "1-A"
     const answersMap = {};
     const regex = /(\d+)\s*[.)\-:]?\s*([A-D])/gi;
     let match;
-    while ((match = regex.exec(keyText)) !== null) {
-        answersMap[match[1]] = normalizeAnswer(match[2]);
-    }
-
-    let appliedCount = 0;
-    let qIndex = 1;
-    
-    // Apply to the specific set
+    while ((match = regex.exec(keyText)) !== null) { answersMap[match[1]] = normalizeAnswer(match[2]); }
+    let appliedCount = 0; let qIndex = 1;
     questions.forEach(q => {
         if(q.setName === setName) {
-            if(answersMap[qIndex] !== undefined) {
-                q.answer = answersMap[qIndex];
-                appliedCount++;
-            }
+            if(answersMap[qIndex] !== undefined) { q.answer = answersMap[qIndex]; appliedCount++; }
             qIndex++;
         }
     });
-
     saveQuestions();
     $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to the set "${setName}".`;
     $("keyText").value = "";
@@ -263,7 +278,7 @@ $("bankBtn").onclick = () => {
   questions.forEach((q,i) => {
     const card = document.createElement("div"); card.className = "question";
     const ansText = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
-    card.innerHTML = `<h3>[${q.setName}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
+    card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
     const del = document.createElement("button"); del.textContent = "Delete"; del.className = "danger";
     del.onclick = () => { questions.splice(i,1); saveQuestions(); $("bankBtn").click(); }; card.appendChild(del); box.appendChild(card);
   });
@@ -272,10 +287,19 @@ $("bankBtn").onclick = () => {
 
 /* QUIZ ENGINE */
 function startQuiz(type) {
-  let aq = [...questions].sort(() => Math.random() - 0.5);
+  const sub = $("quizSubject").value;
+  const set = $("quizSet").value;
+  const top = $("quizTopic").value;
   const limit = parseInt($("examLimit").value);
+
+  let aq = questions.filter(q => 
+    (sub === "All" || q.subject === sub) &&
+    (set === "All" || q.setName === set) &&
+    (top === "All" || q.topic === top)
+  ).sort(() => Math.random() - 0.5);
+
   if(limit > 0 && limit < aq.length) aq = aq.slice(0, limit);
-  if(!aq.length) { alert("No questions available."); return; }
+  if(!aq.length) { alert("No questions match this combination."); return; }
 
   mode = type; quiz = aq; answers = new Array(quiz.length).fill(null); index = 0;
   $("quizHeading").textContent = type === "exam" ? "Examination" : "Practice Mode";
@@ -366,10 +390,37 @@ function finishQuiz(){
   mode = ""; showPage("resultPage");
 }
 
+function refreshDropdowns(){
+  const sub = $("quizSubject").value;
+  
+  // Update Sets
+  const setSelect = $("quizSet");
+  const currentSet = setSelect.value;
+  setSelect.innerHTML = `<option value="All">All Sets</option>`;
+  const sets = new Set();
+  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
+  [...sets].sort().forEach(s => setSelect.innerHTML += `<option value="${s}">${s}</option>`);
+  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
+
+  // Update Topics
+  const topicSelect = $("quizTopic");
+  const currentTopic = topicSelect.value;
+  topicSelect.innerHTML = `<option value="All">All topics</option>`;
+  const topics = new Set();
+  questions.forEach(q => { 
+    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
+  });
+  [...topics].sort().forEach(t => topicSelect.innerHTML += `<option value="${t}">${t}</option>`);
+  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
+}
+
+$("quizSubject").onchange = refreshDropdowns;
+$("quizSet").onchange = refreshDropdowns;
 $("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
 $("menuResultBtn").onclick = () => showPage("menuPage");
 document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
-updateCount();
+
+updateCount(); refreshDropdowns();
 })();
 </script>
 </body>
