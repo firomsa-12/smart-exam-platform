@@ -30,19 +30,39 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
+.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
+.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
 </style>
 </head>
 <body>
 <div class="container">
+
+<div id="appError" class="card" style="display:none;border:2px solid #ff6577">
+  <h2 style="color:#ff6577">App Error</h2>
+  <pre id="appErrorText"></pre>
+</div>
+
+<script>
+window.addEventListener("error", function(event) {
+  var box = document.getElementById("appError");
+  var text = document.getElementById("appErrorText");
+  if (box && text) {
+    box.style.display = "block";
+    text.textContent = event.message || "Unknown error";
+  }
+});
+</script>
+
 <header>
 <h1>🎓 SMART EXAM PLATFORM</h1>
+<p class="small">Learn · Practice · Test Your Knowledge</p>
 </header>
 
 <section id="loginPage" class="card">
 <h2>Student Login</h2>
-<label>Student Name</label>
+<label for="studentName">Student Name</label>
 <input id="studentName" placeholder="Enter your full name">
-<label>School Name</label>
+<label for="schoolName">School Name</label>
 <input id="schoolName" placeholder="Enter your school name">
 <button id="continueBtn" type="button">Continue →</button>
 <p id="loginMessage" class="small"></p>
@@ -53,8 +73,18 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <p id="welcome"></p>
 <div class="info">Total Questions available: <strong id="count">0</strong></div>
 
+<label for="quizSubject">Subject</label>
+<select id="quizSubject">
+<option value="All">All subjects</option>
+<option>Physics</option><option>Chemistry</option><option>Biology</option>
+<option>Mathematics</option><option>English</option><option>General</option>
+</select>
+
 <label for="quizSet">Exam Set (Document)</label>
 <select id="quizSet"><option value="All">All Sets</option></select>
+
+<label for="quizTopic">Topic</label>
+<select id="quizTopic"><option value="All">All topics</option></select>
 
 <label for="examLimit">Number of questions for this session (Leave empty for all)</label>
 <input id="examLimit" type="number" min="1" placeholder="e.g. 20">
@@ -70,32 +100,35 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <section id="addPage" class="card hidden">
 <h2>Add Questions Manually</h2>
-<label>Subject</label>
+<label for="addSubject">Subject</label>
 <select id="addSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
-<label>Set Name</label>
+<label for="addSet">Set Name (e.g., Chapter 1)</label>
 <input id="addSet" placeholder="e.g., Kinematics Manual">
-<label>Duration (minutes)</label>
+<label for="addTopic">Topic</label>
+<input id="addTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
+<datalist id="topicSuggestions"></datalist>
+<label for="duration">Examination duration (minutes)</label>
 <input id="duration" type="number" min="1" max="600" value="30">
 <button id="saveDurationBtn" class="secondary">Save Time Limit</button>
 <p id="durationMessage" class="small"></p>
 <hr>
-<label>Question</label>
+<label for="qText">Question</label>
 <textarea id="qText" placeholder="Enter your question"></textarea>
-<label>Option A</label><input id="a" placeholder="Option A">
-<label>Option B</label><input id="b" placeholder="Option B">
-<label>Option C</label><input id="c" placeholder="Option C">
-<label>Option D</label><input id="d" placeholder="Option D">
+<label for="a">Option A</label><input id="a" placeholder="Option A">
+<label for="b">Option B</label><input id="b" placeholder="Option B">
+<label for="c">Option C</label><input id="c" placeholder="Option C">
+<label for="d">Option D</label><input id="d" placeholder="Option D">
 
 <div class="info">
   <strong>🤖 Need the answer?</strong>
-  <p class="small">Open normal ChatGPT to find the correct answer automatically.</p>
+  <p class="small">Open normal ChatGPT to find the correct answer.</p>
   <button id="openChatGPTBtn" type="button" style="background:#10a37f; color:white;">Open ChatGPT to get Answer</button>
 </div>
 
-<label>Correct answer</label>
+<label for="correct">Correct answer</label>
 <select id="correct">
 <option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
 </select>
@@ -106,22 +139,33 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <section id="importPage" class="card hidden">
 <h2>Import Questions</h2>
-<label>Default subject</label>
+<label for="importSubject">Default subject for imported questions</label>
 <select id="importSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
-<label>Document / Set Name</label>
-<input id="importSetName" placeholder="e.g., Kinematics Test 1">
-<label>Paste JSON questions</label>
-<textarea id="jsonText" placeholder="Paste JSON here"></textarea>
+
+<label for="importSetName">Document / Set Name</label>
+<input id="importSetName" placeholder="e.g., Kinematics Test 1 (Auto-fills from file name)">
+<p class="small">Questions will be saved into this specific set. Duplicates are skipped.</p>
+
+<label for="importTopic">Default topic</label>
+<input id="importTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
+
+<div class="info">
+<strong>JSON example:</strong>
+<pre style="color:#19d3c5">[{"question":"2+2?","options":["3","4","5","6"],"answer":"B","subject":"Mathematics"}]</pre>
+</div>
+<label for="jsonText">Paste JSON questions</label>
+<textarea id="jsonText" placeholder="Paste your complete JSON questions here"></textarea>
 <button id="importTextBtn">Import Pasted JSON</button>
 <hr>
-<label>Choose a file</label>
+<label for="jsonFile">Choose a JSON, TXT, PDF, or Word file</label>
 <input type="file" id="jsonFile" accept=".json,.txt,.pdf,.docx">
+<p id="selectedFile" class="small">No file selected.</p>
 <button id="chooseFileBtn" class="secondary" type="button">Choose File</button>
 <button id="importFileBtn" class="secondary" type="button">Import Selected File</button>
-<p id="importMessage" class="small"></p>
+<p id="importMessage" class="small" role="status" aria-live="polite"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
@@ -155,34 +199,54 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <script>
 (function(){
 "use strict";
+
 const $ = id => document.getElementById(id);
 const pages = ["loginPage","menuPage","addPage","importPage","bankPage","quizPage","resultPage"];
-let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
+
+let questions = [];
+let student = {name:"",school:""};
+let minutes = 30;
+let quiz = [];
+let answers = [];
+let index = 0;
+let mode = "";
+let seconds = 0;
+let timerId = null;
+let locked = false;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
+
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
+function normalizeTopic(value){ return String(value || "").trim() || "General"; }
 function normalizeSet(value){ return String(value || "").trim() || "Default Set"; }
+function normalizeQuestionText(value){ return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," "); }
 
 try{
   const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
-  if(Array.isArray(saved)) questions = saved.filter(q => q && q.question).map(q => ({...q, subject: normalizeSubject(q.subject), setName: normalizeSet(q.setName)}));
+  if(Array.isArray(saved)) {
+    questions = saved.filter(q => q && q.question && Array.isArray(q.options) && q.options.length===4).map(q => ({
+      ...q, subject: normalizeSubject(q.subject), topic: normalizeTopic(q.topic), setName: normalizeSet(q.setName)
+    }));
+  }
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
-  if(savedMinutes >= 1) minutes = savedMinutes;
-}catch(e){}
+  if(savedMinutes >= 1 && savedMinutes <= 600) minutes = savedMinutes;
+}catch(e){ console.warn("Storage error", e); }
 
 function saveQuestions(){
-  try { localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions)); updateCount(); } 
-  catch(e) { alert("Storage full."); }
+  try{
+    localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
+    updateCount();
+    return true;
+  }catch(e){ alert("Storage full."); return false; }
 }
 function updateCount(){ $("count").textContent = questions.length; }
 
 function showPage(id){
-  if(mode === "exam" && id !== "quizPage" && id !== "resultPage"){
-    if(!confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
-    if(timerId) clearInterval(timerId);
-    mode = "";
+  if(mode === "exam" && id !== "quizPage" && id !== "resultPage" && id !== "menuPage"){
+    $("quizMessage").textContent = "Finish the examination before leaving.";
+    return;
   }
   pages.forEach(p => $(p).classList.add("hidden"));
   $(id).classList.remove("hidden");
@@ -190,141 +254,430 @@ function showPage(id){
 }
 
 function login(){
-  const name = $("studentName").value.trim(), school = $("schoolName").value.trim();
+  const name = $("studentName").value.trim();
+  const school = $("schoolName").value.trim();
   if(!name || !school){ $("loginMessage").textContent = "Enter name and school."; return; }
-  student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
+  student = {name,school};
+  $("welcome").textContent = "Welcome, " + name;
+  showPage("menuPage");
 }
 
-/* CHATGPT BUTTON LOGIC */
+function saveDuration(){
+  const value = Number($("duration").value);
+  if(value >= 1 && value <= 600){
+    localStorage.setItem(MINUTES_KEY,String(value));
+    minutes = value;
+    $("durationMessage").textContent = "Time limit saved.";
+  }
+}
+
 $("openChatGPTBtn").onclick = function() {
     const q = $("qText").value.trim();
     const a = $("a").value.trim(), b = $("b").value.trim(), c = $("c").value.trim(), d = $("d").value.trim();
     if(!q || !a || !b || !c || !d) { alert("Please fill out the question and all 4 options first."); return; }
-    
     const prompt = `What is the correct answer to this multiple-choice question? Reply with ONLY the letter (A, B, C, or D).\n\nQuestion: ${q}\nA) ${a}\nB) ${b}\nC) ${c}\nD) ${d}`;
     window.open("https://chatgpt.com/?q=" + encodeURIComponent(prompt), "_blank");
 };
 
-$("saveQuestionBtn").onclick = function() {
-  const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
+function addQuestion(){
+  const q = $("qText").value.trim();
+  const opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
   if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
-  questions.push({question:q, options:opts, answer:Number($("correct").value), subject:normalizeSubject($("addSubject").value), setName:normalizeSet($("addSet").value)});
-  saveQuestions(); $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); $("addMessage").textContent = "Question saved!";
-};
-
-$("continueBtn").onclick = login;
-$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
-$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
-$("importBtn").onclick = () => showPage("importPage");
-$("bankBtn").onclick = () => {
-  const box = $("bankContent"); box.innerHTML = "";
-  questions.forEach((q,i) => {
-    const card = document.createElement("div"); card.className = "question";
-    card.innerHTML = `<h3>[${q.subject}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("");
-    const del = document.createElement("button"); del.textContent = "Delete"; del.className = "danger";
-    del.onclick = () => { questions.splice(i,1); saveQuestions(); $("bankBtn").click(); }; card.appendChild(del); box.appendChild(card);
-  });
-  showPage("bankPage");
-};
-
-/* QUIZ ENGINE */
-function startQuiz(type) {
-  let aq = [...questions].sort(() => Math.random() - 0.5);
-  const limit = parseInt($("examLimit").value);
-  if(limit > 0 && limit < aq.length) aq = aq.slice(0, limit);
-  if(!aq.length) { alert("No questions available."); return; }
-
-  mode = type; quiz = aq; answers = new Array(quiz.length).fill(null); index = 0;
-  $("quizHeading").textContent = type === "exam" ? "Examination in Progress" : "Practice Mode";
-  $("submitBtn").classList.toggle("hidden", type !== "exam");
   
-  if(type === "exam"){
-    seconds = minutes * 60;
-    $("timer").textContent = `Time Left: ${minutes}m`;
-    if(timerId) clearInterval(timerId);
-    timerId = setInterval(() => { seconds--; $("timer").textContent = `Time Left: ${Math.floor(seconds/60)}m ${seconds%60}s`; if(seconds <= 0) finishQuiz(); }, 1000);
-  } else {
-    $("timer").textContent = "Practice Mode (No Timer)";
-    if(timerId) clearInterval(timerId);
+  questions.push({
+    question:q, options:opts, answer:Number($("correct").value),
+    subject:normalizeSubject($("addSubject").value), 
+    setName:normalizeSet($("addSet").value),
+    topic:normalizeTopic($("addTopic").value)
+  });
+  if(saveQuestions()){
+    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = "");
+    $("addMessage").textContent = "Question saved to " + normalizeSet($("addSet").value);
   }
-  showPage("quizPage"); renderQ();
 }
 
-$("examBtn").onclick = () => startQuiz("exam");
-$("practiceBtn").onclick = () => startQuiz("practice");
+function parseQuestionJSON(text){
+  if(!text) throw Error("Empty JSON.");
+  try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON format."); }
+}
 
-window.selAns = (j) => { 
-  answers[index] = j; 
-  if(mode === "practice") { showFeedback(); }
-};
+function normalizeAnswer(value){
+  if(value === null || value === undefined) return null;
+  if(typeof value === "number" && value >= 0 && value <= 3) return value;
+  const text = String(value).trim().toUpperCase();
+  if(["A","B","C","D"].includes(text)) return text.charCodeAt(0)-65;
+  if(["0","1","2","3"].includes(text)) return Number(text);
+  return null;
+}
 
-function renderQ(){
-  const q = quiz[index];
-  $("position").textContent = `Question ${index+1} of ${quiz.length}`;
-  $("quizMessage").textContent = "";
-  
-  let html = `<h3>${q.question}</h3>`;
-  q.options.forEach((o,j) => {
-    html += `<label class="option" id="opt-${j}">
-      <input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}>
-      <span>${String.fromCharCode(65+j)}. ${o}</span>
-    </label>`;
+function processImported(data, defaultSubject, defaultTopic, defaultSetName){
+  if(!Array.isArray(data) || data.length === 0) throw Error("Needs a non-empty array.");
+  let addedCount = 0;
+  let skippedCount = 0;
+
+  data.forEach(q => {
+    if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) return;
+    const qNorm = normalizeQuestionText(q.question);
+    const isDup = questions.some(existing => normalizeQuestionText(existing.question) === qNorm);
+    if(isDup) { skippedCount++; return; }
+
+    questions.push({
+      question: q.question.trim(),
+      options: q.options.map(o => String(o).trim()),
+      answer: normalizeAnswer(q.answer),
+      subject: normalizeSubject(q.subject || defaultSubject),
+      setName: normalizeSet(q.setName || defaultSetName),
+      topic: normalizeTopic(q.topic || defaultTopic)
+    });
+    addedCount++;
   });
-  $("quizContent").innerHTML = html;
+
+  saveQuestions();
+  refreshDropdowns();
+  return { addedCount, skippedCount };
+}
+
+function importText(){
+  try{
+    const setName = $("importSetName").value.trim() || "Pasted JSON Set";
+    const data = parseQuestionJSON($("jsonText").value);
+    const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
+    $("importMessage").textContent = "Saved " + res.addedCount + " questions to \"" + setName + "\". Skipped " + res.skippedCount + " duplicates.";
+    $("jsonText").value = "";
+  }catch(e){ $("importMessage").textContent = "Error: " + e.message; }
+}
+
+function parseDocumentQuestions(rawText, defaultSubject){
+  if(!rawText) throw Error("No text found.");
+  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
+  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
+  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
   
-  $("nextBtn").textContent = index === quiz.length - 1 ? "Finish" : "Next Question →";
+  const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
+  const answerKey = Object.create(null);
+  const questionChunks = [];
+  let current = null;
+  let readingAnswerKey = false;
+
+  const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
+  const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
+  const answerLine = /^(?:correct\s+)?answer\s*(?:for\s*(?:question\s*)?)?(\d{1,4})?\s*[:\-.)]?\s*([A-D]|[0-3])\s*$/i;
+  const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
+  const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
+
+  for(const line of lines){
+    if(keyHeader.test(line)){ if(current){questionChunks.push(current);current=null;} readingAnswerKey = true; continue; }
+    if(readingAnswerKey){
+      const k = keyItem.exec(line);
+      if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2]); continue; }
+      readingAnswerKey = false;
+    }
+    const qMatch = questionStart.exec(line);
+    if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
+    if(!current) continue;
+    const opt = optionLine.exec(line);
+    if(opt){ current.options[opt[1].toUpperCase().charCodeAt(0)-65] = opt[2].trim(); continue; }
+    const inlineAnswer = answerLine.exec(line);
+    if(inlineAnswer){ current.answer = normalizeAnswer(inlineAnswer[2]); continue; }
+    current.parts.push(line);
+  }
+  if(current) questionChunks.push(current);
+
+  const imported = [];
+  for(const item of questionChunks){
+    if(item.options.length !== 4 || item.options.some(o => !o)) continue;
+    const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
+    imported.push({
+      question: item.parts.join(" ").replace(/\s+/g," ").trim(),
+      options: item.options,
+      answer: answer,
+      subject: defaultSubject
+    });
+  }
+  return imported;
+}
+
+async function extractFileText(file){
+  if(file.name.match(/\.(json|txt)$/i)) return await file.text();
+  if(file.name.match(/\.pdf$/i)){
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
+    let fullText = "";
+    for(let p=1; p<=pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      fullText += "\n" + (await page.getTextContent()).items.map(i=>i.str).join(" ") + "\n";
+    }
+    return fullText;
+  }
+  if(file.name.match(/\.docx$/i)){
+    const buffer = await file.arrayBuffer();
+    return (await mammoth.extractRawText({arrayBuffer:buffer})).value || "";
+  }
+  throw Error("Unsupported file.");
+}
+
+async function importFile(){
+  const file = $("jsonFile").files[0];
+  if(!file) { $("importMessage").textContent = "Choose a file first."; return; }
+  $("importMessage").textContent = "Reading file...";
   
-  if(mode === "practice" && answers[index] !== null) showFeedback();
+  try {
+    let setName = $("importSetName").value.trim();
+    if(!setName) setName = file.name.replace(/\.[^/.]+$/, "");
+
+    const rawText = await extractFileText(file);
+    let data = [];
+    if(file.name.match(/\.json$/i)){
+      data = parseQuestionJSON(rawText);
+    } else {
+      data = parseDocumentQuestions(rawText, $("importSubject").value);
+    }
+    
+    const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
+    $("importMessage").textContent = "Saved " + res.addedCount + " questions to \"" + setName + "\". Skipped " + res.skippedCount + " duplicates.";
+    $("jsonFile").value = "";
+    $("selectedFile").textContent = "No file selected.";
+  } catch(e) {
+    $("importMessage").textContent = "Error: " + e.message;
+  }
+}
+
+function showBank(){
+  const box = $("bankContent");
+  box.replaceChildren();
+  if(!questions.length){ box.textContent = "Your bank is empty."; return; }
+  
+  const grouped = {};
+  SUBJECTS.forEach(s => grouped[s] = {});
+  questions.forEach((q,i) => {
+    const sub = normalizeSubject(q.subject);
+    const set = normalizeSet(q.setName);
+    if(!grouped[sub][set]) grouped[sub][set] = [];
+    grouped[sub][set].push({...q, originalIndex: i});
+  });
+
+  SUBJECTS.forEach(sub => {
+    const sets = Object.keys(grouped[sub]);
+    if(sets.length === 0) return;
+    
+    const sHeader = document.createElement("div");
+    sHeader.className = "subject-header";
+    sHeader.textContent = sub;
+    box.appendChild(sHeader);
+
+    sets.forEach(setName => {
+      const setH = document.createElement("div");
+      setH.className = "set-header";
+      setH.textContent = "📁 " + setName + " (" + grouped[sub][setName].length + ")";
+      box.appendChild(setH);
+
+      grouped[sub][setName].forEach((q) => {
+        const card = document.createElement("div");
+        card.className = "question";
+        card.innerHTML = "<h3>" + q.question + "</h3>";
+        q.options.forEach((o,j) => card.innerHTML += "<p>" + String.fromCharCode(65+j) + ". " + o + "</p>");
+        card.innerHTML += "<p class='small'>Answer: " + (q.answer===null ? 'AI will grade' : String.fromCharCode(65+q.answer)) + "</p>";
+        
+        const del = document.createElement("button");
+        del.textContent = "Delete"; del.className = "danger";
+        del.onclick = () => { if(confirm("Delete?")) { questions.splice(q.originalIndex,1); saveQuestions(); showBank(); } };
+        card.appendChild(del);
+        box.appendChild(card);
+      });
+    });
+  });
+  showPage("bankPage");
+}
+
+function startQuiz(which){
+  const chosenSubject = $("quizSubject").value;
+  const chosenSet = $("quizSet").value;
+  const chosenTopic = $("quizTopic").value;
+  const limit = parseInt($("examLimit").value);
+
+  let availableQuestions = questions.filter(q =>
+    (chosenSubject === "All" || normalizeSubject(q.subject) === chosenSubject) &&
+    (chosenSet === "All" || normalizeSet(q.setName) === chosenSet) &&
+    (chosenTopic === "All" || normalizeTopic(q.topic) === chosenTopic)
+  );
+
+  if(!availableQuestions.length){ alert("No questions match this combination."); return; }
+  
+  availableQuestions = availableQuestions.sort(() => Math.random() - 0.5);
+  if(limit > 0 && limit < availableQuestions.length) {
+    availableQuestions = availableQuestions.slice(0, limit);
+  }
+
+  if(which === "exam" && !confirm("Start timed exam with " + availableQuestions.length + " questions?")) return;
+  if(timerId) clearInterval(timerId);
+
+  mode = which;
+  quiz = availableQuestions.map(q => ({
+    question:q.question, options:[...q.options], answer:q.answer,
+    subject:normalizeSubject(q.subject), topic:normalizeTopic(q.topic)
+  }));
+
+  answers = new Array(quiz.length).fill(null);
+  index = 0; locked = false;
+  $("quizHeading").textContent = which === "exam" ? "Examination" : "Practice";
+  $("submitBtn").classList.toggle("hidden",which !== "exam");
+  $("quitBtn").classList.remove("hidden"); 
+  $("quizMessage").textContent = "";
+
+  if(which === "exam"){
+    seconds = minutes * 60;
+    updateTimer();
+    timerId = setInterval(() => { seconds--; updateTimer(); if(seconds <= 0) finish(true); },1000);
+  } else {
+    $("timer").textContent = "Practice Mode";
+  }
+
+  showPage("quizPage");
+  renderQuestion();
+}
+
+function updateTimer(){
+  $("timer").textContent = String(Math.floor(Math.max(0,seconds)/60)).padStart(2,"0") + ":" + String(Math.max(0,seconds)%60).padStart(2,"0");
+}
+
+function renderQuestion(){
+  locked = false;
+  const q = quiz[index];
+  $("position").textContent = "Question " + (index+1) + " of " + quiz.length;
+  const box = $("quizContent"); box.replaceChildren();
+  box.innerHTML = "<p class='small'>" + q.subject + " → " + q.topic + "</p><h3>" + q.question + "</h3>";
+
+  q.options.forEach((option,j) => {
+    const label = document.createElement("label");
+    label.className = "option";
+    const radio = document.createElement("input");
+    radio.type = "radio"; radio.name = "choice"; radio.checked = answers[index] === j;
+    
+    radio.onchange = function() { 
+      if(locked) return; 
+      answers[index] = j; 
+      if(mode === "practice"){ 
+        locked = true; 
+        showFeedback(); 
+      } 
+    };
+    label.append(radio, document.createTextNode(String.fromCharCode(65+j) + ". " + option));
+    box.appendChild(label);
+  });
+
+  $("nextBtn").textContent = index === quiz.length-1 ? "Finish" : "Next →";
+  if(mode === "practice" && answers[index] !== null){ locked = true; showFeedback(); }
 }
 
 function showFeedback(){
   const q = quiz[index];
-  for(let j=0; j<4; j++) {
-    const el = $("opt-"+j);
-    if(!el) continue;
-    el.querySelector("input").disabled = true;
-    if(j === q.answer) el.style.border = "2px solid #19d3c5";
-    if(j === answers[index] && j !== q.answer) el.style.border = "2px solid #ff6577";
-  }
-  $("quizMessage").textContent = answers[index] === q.answer ? "✅ Correct!" : `❌ Incorrect. Correct answer: ${String.fromCharCode(65+q.answer)}`;
+  [...$("quizContent").querySelectorAll(".option")].forEach((label,j) => {
+    label.querySelector("input").disabled = true;
+    if(q.answer !== null && j === q.answer) label.style.border = "2px solid #19d3c5";
+    if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
+  });
+  if(q.answer === null) $("quizMessage").textContent = "Saved. (No answer key).";
+  else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : "Incorrect. Answer: " + String.fromCharCode(65+q.answer);
 }
 
-$("nextBtn").onclick = () => { 
-  if(mode === "practice" && answers[index] === null) { $("quizMessage").textContent = "Please select an answer first."; return; }
-  if(index < quiz.length-1){ index++; renderQ(); } 
-  else { finishQuiz(); } 
+function nextQuestion(){
+  if(mode === "practice" && answers[index] === null){ $("quizMessage").textContent = "Choose an answer."; return; }
+  if(index < quiz.length-1){ index++; renderQuestion(); }
+  else if(mode === "exam"){ if(confirm("Submit?")) finish(false); }
+  else finish(false);
+}
+
+function finish(expired){
+  if(timerId) clearInterval(timerId);
+  
+  let score = 0, gradable = 0;
+  quiz.forEach((q,i) => { if(q.answer !== null){ gradable++; if(answers[i] === q.answer) score++; } });
+
+  $("resultStudent").textContent = "Student: " + student.name + " · School: " + student.school;
+  $("score").textContent = gradable ? score + " / " + gradable : "No answer key available";
+  
+  const percent = gradable ? Math.round(score/gradable*100) : 0;
+  $("percentage").textContent = gradable ? "Score: " + percent + "% " + (expired ? '· Time Expired' : '') : "Ungraded questions";
+
+  const review = $("review"); review.replaceChildren();
+  quiz.forEach((q,i) => {
+    const card = document.createElement("div"); card.className = "question";
+    card.innerHTML = "<h3>" + (i+1) + ". " + q.question + "</h3>" +
+      "<p>Your answer: " + (answers[i]===null?'None':String.fromCharCode(65+answers[i])) + "</p>" +
+      "<p class='small'>Correct: " + (q.answer===null?'None':String.fromCharCode(65+q.answer)) + "</p>";
+    review.appendChild(card);
+  });
+  mode = ""; 
+  showPage("resultPage");
+}
+
+function refreshDropdowns(){
+  const sub = $("quizSubject").value;
+  const setSelect = $("quizSet");
+  const currentSet = setSelect.value;
+  setSelect.replaceChildren();
+  const allSets = document.createElement("option"); allSets.value = "All"; allSets.textContent = "All Sets"; setSelect.appendChild(allSets);
+  
+  const sets = new Set();
+  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
+  [...sets].sort().forEach(s => {
+    const opt = document.createElement("option"); opt.value = s; opt.textContent = s; setSelect.appendChild(opt);
+  });
+  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
+
+  const topicSelect = $("quizTopic");
+  const currentTopic = topicSelect.value;
+  topicSelect.replaceChildren();
+  const allTopics = document.createElement("option"); allTopics.value = "All"; allTopics.textContent = "All topics"; topicSelect.appendChild(allTopics);
+  
+  const topics = new Set();
+  questions.forEach(q => { 
+    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
+  });
+  [...topics].sort().forEach(t => {
+    const opt = document.createElement("option"); opt.value = t; opt.textContent = t; topicSelect.appendChild(opt);
+  });
+  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
+}
+
+function refreshTopicSuggestions(){
+  const list = $("topicSuggestions"); list.replaceChildren();
+  const sub = $("addSubject").value;
+  const topics = new Set(["General"]);
+  questions.filter(q => q.subject === sub).forEach(q => topics.add(q.topic));
+  [...topics].sort().forEach(t => {
+    const opt = document.createElement("option"); opt.value = t; list.appendChild(opt);
+  });
+}
+
+$("quizSubject").onchange = refreshDropdowns;
+$("quizSet").onchange = refreshDropdowns;
+$("addSubject").onchange = refreshTopicSuggestions;
+$("continueBtn").onclick = login;
+$("saveDurationBtn").onclick = saveDuration;
+$("saveQuestionBtn").onclick = addQuestion;
+$("importTextBtn").onclick = importText;
+$("chooseFileBtn").onclick = function() { $("jsonFile").click(); };
+$("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
+$("importFileBtn").onclick = importFile;
+$("examBtn").onclick = function() { startQuiz("exam"); };
+$("practiceBtn").onclick = function() { startQuiz("practice"); };
+$("addBtn").onclick = function() { $("duration").value = minutes; showPage("addPage"); };
+$("importBtn").onclick = function() { showPage("importPage"); };
+$("bankBtn").onclick = showBank;
+$("nextBtn").onclick = nextQuestion;
+$("submitBtn").onclick = function() { finish(false); };
+$("menuResultBtn").onclick = function() { showPage("menuPage"); };
+document.querySelectorAll(".backBtn").forEach(function(b) { b.onclick = function() { showPage("menuPage"); }; });
+
+$("quitBtn").onclick = function() {
+    if(mode === "exam" && !confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
+    if(timerId) clearInterval(timerId);
+    mode = "";
+    showPage("menuPage");
 };
 
-$("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
-
-function finishQuiz(){
-  if(timerId) clearInterval(timerId);
-  let score = 0;
-  quiz.forEach((q,i) => { if(answers[i] === q.answer) score++; });
-  
-  const percent = Math.round((score / quiz.length) * 100);
-  
-  $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
-  $("score").textContent = `Score: ${score} / ${quiz.length}`;
-  $("percentage").textContent = `Percentage: ${percent}%`;
-  
-  let reviewHtml = "";
-  quiz.forEach((q,i) => {
-    reviewHtml += `<div class="question">
-      <p><strong>Q${i+1}: ${q.question}</strong></p>
-      <p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p>
-      <p class="small" style="color:#19d3c5;">Correct answer: ${String.fromCharCode(65+q.answer)}</p>
-    </div>`;
-  });
-  $("review").innerHTML = reviewHtml;
-  
-  mode = ""; showPage("resultPage");
-}
-
-$("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
-$("menuResultBtn").onclick = () => showPage("menuPage");
-document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
-updateCount();
+updateCount(); refreshTopicSuggestions(); refreshDropdowns();
 })();
 </script>
 </body>
