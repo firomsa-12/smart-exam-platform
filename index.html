@@ -222,7 +222,8 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 const API_KEY = "smartExamGeminiKey";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+// UPDATED MODEL NAME HERE:
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -296,7 +297,6 @@ function addQuestion(){
   }
 }
 
-/* --- IMPROVED AI HELPER FUNCTION --- */
 async function getAIAnswerForSingle(q, key) {
   const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
 Question: ${q.question}
@@ -319,13 +319,12 @@ Return a JSON object with exactly one key "answer" and a value of "A", "B", "C",
   const data = await res.json();
   if(data.error) throw new Error(data.error.message);
   
-  // Parse the clean JSON response
   const aiText = data.candidates[0].content.parts[0].text.trim();
   const parsed = JSON.parse(aiText);
   const answerLetter = parsed.answer.toUpperCase();
   
   if(["A","B","C","D"].includes(answerLetter)) {
-    return answerLetter.charCodeAt(0) - 65; // Returns 0, 1, 2, or 3
+    return answerLetter.charCodeAt(0) - 65; 
   }
   return null;
 }
@@ -583,7 +582,7 @@ function startQuiz(which){
   index = 0; locked = false;
   $("quizHeading").textContent = which === "exam" ? "Examination" : "Practice";
   $("submitBtn").classList.toggle("hidden",which !== "exam");
-  $("quitBtn").classList.remove("hidden"); // Show quit button
+  $("quitBtn").classList.remove("hidden"); 
   $("quizMessage").textContent = "";
   $("aiLoading").classList.add("hidden");
 
@@ -773,7 +772,6 @@ $("submitBtn").onclick = function() { finish(false); };
 $("menuResultBtn").onclick = function() { showPage("menuPage"); };
 document.querySelectorAll(".backBtn").forEach(function(b) { b.onclick = function() { showPage("menuPage"); }; });
 
-/* --- QUIT BUTTON LOGIC --- */
 $("quitBtn").onclick = function() {
     if(mode === "exam" && !confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
     if(timerId) clearInterval(timerId);
