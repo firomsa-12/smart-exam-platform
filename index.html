@@ -125,9 +125,9 @@ window.addEventListener("error", function(event) {
 <label for="d">Option D</label><input id="d" placeholder="Option D">
 
 <div class="info">
-  <strong>🤖 AI Auto-Answer (Free via Groq)</strong>
-  <p class="small">Get a free API key from <a href="https://console.groq.com/keys" target="_blank">Groq Console</a>.</p>
-  <input id="apiKey" type="password" placeholder="Paste Groq API Key here (gsk_...)">
+  <strong>🤖 AI Auto-Answer (Google Gemini)</strong>
+  <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
+  <input id="apiKey" type="password" placeholder="Paste Google Gemini API Key here (AIza...)">
   <button id="aiAnswerBtn" class="secondary" type="button">Ask AI for Correct Answer</button>
 </div>
 
@@ -221,7 +221,9 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
-const API_KEY = "smartExamGroqKey"; 
+const API_KEY = "smartExamGeminiKey";
+// UPDATED TO GOOGLE GEMINI STABLE MODEL
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -295,7 +297,6 @@ function addQuestion(){
   }
 }
 
-/* --- UPDATED GROQ AI INTEGRATION --- */
 async function getAIAnswerForSingle(q, key) {
   const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
 Question: ${q.question}
@@ -305,24 +306,20 @@ C) ${q.options[2]}
 D) ${q.options[3]}
 
 Return a JSON object with exactly one key "answer" and a value of "A", "B", "C", or "D".`;
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+  
+  const res = await fetch(GEMINI_URL + key, {
     method: 'POST',
-    headers: { 
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + key
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
-      model: "openai/gpt-oss-20b", // UPDATED MODEL
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" }
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json" }
     })
   });
   
   const data = await res.json();
   if(data.error) throw new Error(data.error.message);
   
-  const aiText = data.choices[0].message.content.trim();
+  const aiText = data.candidates[0].content.parts[0].text.trim();
   const parsed = JSON.parse(aiText);
   const answerLetter = parsed.answer.toUpperCase();
   
@@ -334,7 +331,7 @@ Return a JSON object with exactly one key "answer" and a value of "A", "B", "C",
 
 async function getAIAnswer() {
   const key = $("apiKey").value.trim();
-  if(!key) { alert("Please enter your Groq API key first."); return; }
+  if(!key) { alert("Please enter your Gemini API key first."); return; }
   localStorage.setItem(API_KEY, key);
 
   const q = $("qText").value.trim();
