@@ -35,8 +35,6 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
-.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
 #loadingData { text-align: center; color: #19d3c5; font-weight: bold; margin: 20px; }
 </style>
 </head>
@@ -268,7 +266,6 @@ function login(){
   student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
 }
 
-// 3. SAVE TO FIREBASE
 $("saveQuestionBtn").onclick = function() {
   const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
   if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
@@ -294,7 +291,6 @@ $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage")
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
 
-// 4. APPLY KEY (UPDATE FIREBASE)
 $("applyKeyBtn").onclick = function() {
     const setName = normalizeSet($("keySetName").value);
     const subName = normalizeSubject($("keySubject").value);
@@ -333,7 +329,6 @@ $("applyKeyBtn").onclick = function() {
     });
 };
 
-// 5. QUESTION BANK (DELETE FROM FIREBASE)
 $("bankBtn").onclick = () => {
   const box = $("bankContent"); box.innerHTML = "";
   questions.forEach((q) => {
@@ -344,9 +339,7 @@ $("bankBtn").onclick = () => {
     const del = document.createElement("button"); del.textContent = "Delete from Cloud"; del.className = "danger";
     del.onclick = () => { 
         if(confirm("Delete this question permanently from the cloud?")) { 
-            db.collection("questions").doc(q.id).delete().then(() => {
-                // The onSnapshot listener will automatically refresh the list
-            });
+            db.collection("questions").doc(q.id).delete();
         } 
     }; 
     card.appendChild(del); box.appendChild(card);
@@ -433,7 +426,6 @@ $("nextBtn").onclick = () => {
 
 $("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
 
-// 6. SAVE RESULTS TO FIREBASE
 function finishQuiz(){
   if(timerId) clearInterval(timerId);
   let score = 0, gradable = 0;
@@ -452,7 +444,6 @@ function finishQuiz(){
   $("percentage").innerHTML = gradable > 0 ? `Percentage: ${percent}%<br><span style="font-size:16px;">${comment}</span>` : "Ungraded questions";
   $("percentage").style.color = color;
 
-  // Save result to database (Only for exams, not practice)
   if (mode === "exam" && gradable > 0) {
       db.collection("results").add({
           studentName: student.name,
@@ -469,3 +460,190 @@ function finishQuiz(){
     const ansTxt = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
     reviewHtml += `<div class="question">
       <p><strong>Q${i+1}: ${q.question}</strong></p>
+      <p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p>
+      <p class="small" style="color:#19d3c5;">Correct answer: ${ansTxt}</p>
+    </div>`;
+  });
+  $("review").innerHTML = reviewHtml;
+  
+  mode = ""; showPage("resultPage");
+}
+
+function refreshDropdowns(){
+  const sub = $("quizSubject").value;
+  
+  const setSelect = $("quizSet");
+  const currentSet = setSelect.value;
+  setSelect.innerHTML = `<option value="All">All Sets</option>`;
+  const sets = new Set();
+  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
+  [...sets].sort().forEach(s => setSelect.innerHTML += `<option value="${s}">${s}</option>`);
+  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
+
+  const topicSelect = $("quizTopic");
+  const currentTopic = topicSelect.value;
+  topicSelect.innerHTML = `<option value="All">All topics</option>`;
+  const topics = new Set();
+  questions.forEach(q => { 
+    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
+  });
+  [...topics].sort().forEach(t => topicSelect.innerHTML += `<option value="${t}">${t}</option>`);
+  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
+}
+
+$("quizSubject").onchange = refreshDropdowns;
+$("quizSet").onchange = refreshDropdowns;
+$("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
+$("menuResultBtn").onclick = () => showPage("menuPage");
+document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
+
+// ========== IMPORT LOGIC (RESTORED & CONNECTED TO CLOUD) ==========
+function saveImportedQuestions(importedData) {
+    if(!importedData.length) { $("importMessage").textContent = "No valid questions found."; return; }
+    $("importMessage").textContent = "Uploading questions to cloud...";
+    
+    let batch = db.batch();
+    importedData.forEach(q => {
+        const newDocRef = db.collection("questions").doc();
+        batch.set(newDocRef, q);
+    });
+    batch.commit().then(() => {
+        $("importMessage").textContent = "✅ Questions imported to cloud successfully!";
+        $("jsonText").value = "";
+        $("jsonFile").value = "";
+        $("selectedFile").textContent = "No file selected.";
+    }).catch(err => $("importMessage").textContent = "Error importing: " + err.message);
+}
+
+function parseQuestionJSON(text){
+  if(!text) throw Error("Empty JSON.");
+  try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON format."); }
+}
+
+function processImported(data, defaultSubject, defaultTopic, defaultSetName){
+  if(!Array.isArray(data) || data.length === 0) throw Error("Needs a non-empty array.");
+  return data.map(q => ({
+      question: q.question.trim(),
+      options: q.options.map(o => String(o).trim()),
+      answer: normalizeAnswer(q.answer),
+      subject: normalizeSubject(q.subject || defaultSubject),
+      setName: normalizeSet(q.setName || defaultSetName),
+      topic: normalizeTopic(q.topic || defaultTopic)
+  })).filter(q => q.question && q.options.length === 4);
+}
+
+function parseDocumentQuestions(rawText, defaultSubject){
+  if(!rawText) throw Error("No text found.");
+  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
+  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
+  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
+  
+  const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
+  const answerKey = Object.create(null);
+  const questionChunks = [];
+  let current = null;
+  let readingAnswerKey = false;
+
+  const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
+  const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
+  const answerLine = /^(?:correct\s+)?answer\s*(?:for\s*(?:question\s*)?)?(\d{1,4})?\s*[:\-.)]?\s*([A-D]|[0-3])\s*$/i;
+  const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
+  const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
+
+  for(const line of lines){
+    if(keyHeader.test(line)){ if(current){questionChunks.push(current);current=null;} readingAnswerKey = true; continue; }
+    if(readingAnswerKey){
+      const k = keyItem.exec(line);
+      if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2]); continue; }
+      readingAnswerKey = false;
+    }
+    const qMatch = questionStart.exec(line);
+    if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
+    if(!current) continue;
+    const opt = optionLine.exec(line);
+    if(opt){ 
+        let optText = opt[2].trim();
+        if(optText.length > 150) optText = optText.substring(0, 150) + "...";
+        current.options[opt[1].toUpperCase().charCodeAt(0)-65] = optText; 
+        continue; 
+    }
+    const inlineAnswer = answerLine.exec(line);
+    if(inlineAnswer){ current.answer = normalizeAnswer(inlineAnswer[2]); continue; }
+    current.parts.push(line);
+  }
+  if(current) questionChunks.push(current);
+
+  const imported = [];
+  for(const item of questionChunks){
+    if(item.options.length !== 4 || item.options.some(o => !o)) continue;
+    const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
+    imported.push({
+      question: item.parts.join(" ").replace(/\s+/g," ").trim(),
+      options: item.options,
+      answer: answer,
+      subject: defaultSubject
+    });
+  }
+  return imported;
+}
+
+async function extractFileText(file){
+  if(file.name.match(/\.(json|txt)$/i)) return await file.text();
+  if(file.name.match(/\.pdf$/i)){
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
+    let fullText = "";
+    for(let p=1; p<=pdf.numPages; p++){
+      const page = await pdf.getPage(p);
+      fullText += "\n" + (await page.getTextContent()).items.map(i=>i.str).join(" ") + "\n";
+    }
+    return fullText;
+  }
+  if(file.name.match(/\.docx$/i)){
+    const buffer = await file.arrayBuffer();
+    return (await mammoth.extractRawText({arrayBuffer:buffer})).value || "";
+  }
+  throw Error("Unsupported file.");
+}
+
+$("importTextBtn").onclick = () => {
+    try {
+        const setName = $("importSetName").value.trim() || "Pasted JSON Set";
+        const data = parseQuestionJSON($("jsonText").value);
+        const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
+        saveImportedQuestions(res);
+    } catch(e) { $("importMessage").textContent = "Error: " + e.message; }
+};
+
+$("chooseFileBtn").onclick = () => $("jsonFile").click();
+$("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
+
+$("importFileBtn").onclick = async function() {
+  const file = $("jsonFile").files[0];
+  if(!file) { $("importMessage").textContent = "Choose a file first."; return; }
+  $("importMessage").textContent = "Reading file...";
+  
+  try {
+    let setName = $("importSetName").value.trim();
+    if(!setName) setName = file.name.replace(/\.[^/.]+$/, "");
+
+    const rawText = await extractFileText(file);
+    let data = [];
+    if(file.name.match(/\.json$/i)){
+      data = parseQuestionJSON(rawText);
+    } else {
+      data = parseDocumentQuestions(rawText, $("importSubject").value);
+    }
+    
+    const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
+    saveImportedQuestions(res);
+  } catch(e) {
+    $("importMessage").textContent = "Error: " + e.message;
+  }
+};
+
+updateCount(); refreshDropdowns();
+})();
+</script>
+</body>
+</html>
