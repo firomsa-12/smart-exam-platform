@@ -221,7 +221,7 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
-const API_KEY = "smartExamGroqKey"; // Updated Key Name
+const API_KEY = "smartExamGroqKey"; 
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -295,7 +295,7 @@ function addQuestion(){
   }
 }
 
-/* --- GROQ AI INTEGRATION --- */
+/* --- UPDATED GROQ AI INTEGRATION --- */
 async function getAIAnswerForSingle(q, key) {
   const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
 Question: ${q.question}
@@ -306,7 +306,6 @@ D) ${q.options[3]}
 
 Return a JSON object with exactly one key "answer" and a value of "A", "B", "C", or "D".`;
 
-  // Groq uses the OpenAI API format
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: 'POST',
     headers: { 
@@ -314,7 +313,7 @@ Return a JSON object with exactly one key "answer" and a value of "A", "B", "C",
       'Authorization': 'Bearer ' + key
     },
     body: JSON.stringify({ 
-      model: "llama-3.1-8b-instant", // Fast and smart free model
+      model: "openai/gpt-oss-20b", // UPDATED MODEL
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" }
     })
