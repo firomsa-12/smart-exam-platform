@@ -35,7 +35,12 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-#loadingData { text-align: center; color: #19d3c5; font-weight: bold; margin: 20px; }
+#loadingData { text-align:center; color:#19d3c5; font-weight:bold; margin:20px; }
+/* Teacher Dashboard Styles */
+.result-card { background: #192b48; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #19d3c5; }
+.result-card.fail { border-left-color: #ff6577; }
+.result-card.pass { border-left-color: #ff9800; }
+.result-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; color: #fff; }
 </style>
 </head>
 <body>
@@ -83,6 +88,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="importBtn" class="secondary">📥 Import Questions</button>
 <button id="keyBtn" class="secondary" style="grid-column: span 2; background: #ff9800; color: white;">🔑 Apply Answer Key</button>
 <button id="bankBtn" class="secondary" style="grid-column: span 2;">🗂 Question Bank</button>
+<!-- TEACHER DASHBOARD BUTTON -->
+<button id="adminBtn" class="secondary" style="grid-column: span 2; background: #4caf50; color: white;">📊 Teacher Dashboard</button>
 </div>
 </section>
 
@@ -139,7 +146,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <hr>
 <label>Choose a file</label>
 <input type="file" id="jsonFile" accept=".json,.txt,.pdf,.docx">
-<!-- RESTORED THE MISSING ELEMENT HERE -->
 <p id="selectedFile" class="small">No file selected.</p>
 <button id="chooseFileBtn" class="secondary" type="button">Choose File</button>
 <button id="importFileBtn" class="secondary" type="button">Import Selected File</button>
@@ -168,6 +174,17 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <h2>Question Bank (Cloud)</h2>
 <div id="bankContent"></div>
 <button class="backBtn secondary">← Back to Menu</button>
+</section>
+
+<!-- NEW TEACHER DASHBOARD PAGE -->
+<section id="adminPage" class="card hidden">
+<h2>📊 Teacher Dashboard</h2>
+<p class="small">Below are the recent exam results submitted by students.</p>
+<button id="refreshResultsBtn" class="secondary">🔄 Refresh Results</button>
+<div id="resultsContainer" style="margin-top: 15px;">
+    <p id="loadingResults" class="small">Loading results...</p>
+</div>
+<button class="backBtn secondary" style="margin-top: 20px;">← Back to Menu</button>
 </section>
 
 <section id="quizPage" class="card hidden">
@@ -210,7 +227,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
 const $ = id => document.getElementById(id);
-const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage","quizPage","resultPage"];
+const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage","adminPage","quizPage","resultPage"];
 let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
 const MINUTES_KEY = "smartExamFixedMinutes";
@@ -259,6 +276,7 @@ function showPage(id){
   }
   pages.forEach(p => $(p).classList.add("hidden"));
   $(id).classList.remove("hidden");
+  if (id === "adminPage") loadStudentResults();
   updateCount();
 }
 
@@ -292,6 +310,62 @@ $("saveDurationBtn").onclick = function(){ const v = Number($("duration").value)
 $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
+
+// 3. TEACHER DASHBOARD LOGIC
+$("adminBtn").onclick = () => {
+    const pin = prompt("Enter Teacher PIN:");
+    if (pin === "1234") {
+        showPage("adminPage");
+    } else if (pin !== null) {
+        alert("Incorrect PIN.");
+    }
+};
+
+function loadStudentResults() {
+    const container = $("resultsContainer");
+    container.innerHTML = "<p class='small'>Fetching results...</p>";
+    
+    db.collection("results").orderBy("date", "desc").get().then((snapshot) => {
+        container.innerHTML = "";
+        if (snapshot.empty) {
+            container.innerHTML = "<p class='small'>No student has taken an exam yet.</p>";
+            return;
+        }
+        
+        snapshot.forEach((doc) => {
+            const data = doc.data();
+            const dateObj = new Date(data.date);
+            const dateStr = dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString();
+            
+            const div = document.createElement("div");
+            div.className = `result-card ${data.percentage >= 50 ? 'pass' : 'fail'}`;
+            
+            div.innerHTML = `
+                <div class="result-header">
+                    <span>${data.studentName} (${data.school})</span>
+                    <span style="color:${data.percentage >= 50 ? '#19d3c5' : '#ff6577'}">${data.percentage}%</span>
+                </div>
+                <div class="small">Score: ${data.score} / ${data.total}</div>
+                <div class="small" style="opacity: 0.6; margin-top: 5px;">${dateStr}</div>
+                <button class="danger" style="margin-top: 10px; padding: 5px; font-size: 12px; width: auto;" onclick="deleteResult('${doc.id}')">Delete</button>
+            `;
+            container.appendChild(div);
+        });
+    }).catch((error) => {
+        container.innerHTML = "<p class='small' style='color:#ff6577'>Error loading results: " + error.message + "</p>";
+    });
+}
+
+// Make delete function global so the inline onclick works
+window.deleteResult = function(id) {
+    if(confirm("Delete this result permanently?")) {
+        db.collection("results").doc(id).delete().then(() => {
+            loadStudentResults(); // Refresh list
+        });
+    }
+};
+
+$("refreshResultsBtn").onclick = loadStudentResults;
 
 $("applyKeyBtn").onclick = function() {
     const setName = normalizeSet($("keySetName").value);
