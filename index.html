@@ -6,6 +6,11 @@
 <title>Smart Exam Platform</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+
+<!-- FIREBASE SCRIPTS -->
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:16px;background:#081225;color:#f0f5ff;font-family:Arial,sans-serif}
@@ -30,6 +35,9 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
+.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
+.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
+#loadingData { text-align: center; color: #19d3c5; font-weight: bold; margin: 20px; }
 </style>
 </head>
 <body>
@@ -51,7 +59,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <section id="menuPage" class="card hidden">
 <h2>Student Dashboard</h2>
 <p id="welcome"></p>
-<div class="info">Total Questions available: <strong id="count">0</strong></div>
+<div class="info">Total Questions available (Cloud): <strong id="count">0</strong></div>
+<div id="loadingData" class="hidden">Connecting to Cloud Database...</div>
 
 <label for="quizSubject">Subject</label>
 <select id="quizSubject">
@@ -106,7 +115,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <select id="correct">
 <option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
 </select>
-<button id="saveQuestionBtn">Save Question</button>
+<button id="saveQuestionBtn">Save Question to Cloud</button>
 <p id="addMessage" class="small"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
@@ -141,17 +150,13 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <section id="keyPage" class="card hidden">
 <h2>🔑 Apply Answer Key</h2>
 <p class="small">Enter your answer key below (e.g., "1. A, 2. C, 3. B"). The app will find the matching questions and apply the answers.</p>
-
-<!-- NEW: Subject Selection for Answer Key -->
 <label>Subject</label>
 <select id="keySubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
-
 <label>Set Name to apply answers to</label>
 <input id="keySetName" placeholder="e.g., Kinematics Test 1">
-
 <label>Paste Answer Key here</label>
 <textarea id="keyText" placeholder="1. A&#10;2. C&#10;3. B&#10;4. D"></textarea>
 <button id="applyKeyBtn">Apply Answers</button>
@@ -160,7 +165,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 </section>
 
 <section id="bankPage" class="card hidden">
-<h2>Question Bank</h2>
+<h2>Question Bank (Cloud)</h2>
 <div id="bankContent"></div>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
@@ -189,11 +194,25 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <script>
 (function(){
 "use strict";
+
+// 1. INITIALIZE FIREBASE
+const firebaseConfig = {
+  apiKey: "AIzaSyC99Vp9s1PvuHkrtc3m9eg9I6rUeeOQEUg",
+  authDomain: "smart-exam-platform-f2150.firebaseapp.com",
+  projectId: "smart-exam-platform-f2150",
+  storageBucket: "smart-exam-platform-f2150.firebasestorage.app",
+  messagingSenderId: "869198602798",
+  appId: "1:869198602798:web:7b061a8946c3a6bcdcf5bf",
+  measurementId: "G-4ZE83MBGBD"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
 const $ = id => document.getElementById(id);
 const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage","quizPage","resultPage"];
 let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
-const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
@@ -210,24 +229,25 @@ function normalizeAnswer(value){
 }
 
 try{
-  const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
-  if(Array.isArray(saved)) questions = saved.filter(q => q && q.question).map(q => ({...q, subject: normalizeSubject(q.subject), setName: normalizeSet(q.setName), topic: normalizeTopic(q.topic)}));
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
   if(savedMinutes >= 1) minutes = savedMinutes;
-}catch(e){ console.warn("Error loading saved data", e); }
+}catch(e){}
 
-// NEW: Better save function with error handling
-function saveQuestions(){
-  try {
-    localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
-    updateCount();
-    refreshDropdowns();
-    return true;
-  } catch(e) {
-    alert("⚠️ Error saving to browser. Your phone storage might be full. Please clear some browser data.");
-    return false;
-  }
-}
+// 2. LOAD DATA FROM FIREBASE IN REAL-TIME
+$("loadingData").classList.remove("hidden");
+db.collection("questions").onSnapshot((snapshot) => {
+  questions = [];
+  snapshot.forEach((doc) => {
+    const data = doc.data();
+    questions.push({ id: doc.id, ...data });
+  });
+  updateCount();
+  refreshDropdowns();
+  $("loadingData").classList.add("hidden");
+}, (error) => {
+  console.error("Error loading data: ", error);
+  $("loadingData").textContent = "Error connecting to database.";
+});
 
 function updateCount(){ $("count").textContent = questions.length; }
 
@@ -248,27 +268,33 @@ function login(){
   student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
 }
 
+// 3. SAVE TO FIREBASE
 $("saveQuestionBtn").onclick = function() {
   const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
   if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
-  questions.push({
-    question:q, options:opts, answer:Number($("correct").value), 
-    subject:normalizeSubject($("addSubject").value), 
-    setName:normalizeSet($("addSet").value), 
-    topic:normalizeTopic($("addTopic").value)
+  
+  $("addMessage").textContent = "Saving to cloud...";
+  
+  db.collection("questions").add({
+    question: q, options: opts, answer: Number($("correct").value), 
+    subject: normalizeSubject($("addSubject").value), 
+    setName: normalizeSet($("addSet").value), 
+    topic: normalizeTopic($("addTopic").value)
+  }).then(() => {
+    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); 
+    $("addMessage").textContent = "Question saved to cloud successfully!";
+  }).catch((error) => {
+    $("addMessage").textContent = "Error saving: " + error.message;
   });
-  if(saveQuestions()){
-    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); $("addMessage").textContent = "Question saved!";
-  }
 };
 
 $("continueBtn").onclick = login;
-$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
+$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved locally."; } };
 $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
 
-// NEW: Apply key now filters by BOTH Subject and Set Name
+// 4. APPLY KEY (UPDATE FIREBASE)
 $("applyKeyBtn").onclick = function() {
     const setName = normalizeSet($("keySetName").value);
     const subName = normalizeSubject($("keySubject").value);
@@ -280,28 +306,50 @@ $("applyKeyBtn").onclick = function() {
     let match;
     while ((match = regex.exec(keyText)) !== null) { answersMap[match[1]] = normalizeAnswer(match[2]); }
     
-    let appliedCount = 0; let qIndex = 1;
-    questions.forEach(q => {
-        if(q.setName === setName && q.subject === subName) {
-            if(answersMap[qIndex] !== undefined) { q.answer = answersMap[qIndex]; appliedCount++; }
-            qIndex++;
+    const questionsToUpdate = questions.filter(q => q.setName === setName && q.subject === subName);
+    if (questionsToUpdate.length === 0) {
+        $("keyMessage").textContent = "No questions found for this Subject and Set Name.";
+        return;
+    }
+
+    $("keyMessage").textContent = "Applying answers...";
+    let batch = db.batch();
+    let appliedCount = 0;
+
+    questionsToUpdate.forEach((q, idx) => {
+        const qNum = idx + 1;
+        if(answersMap[qNum] !== undefined) {
+            const docRef = db.collection("questions").doc(q.id);
+            batch.update(docRef, { answer: answersMap[qNum] });
+            appliedCount++;
         }
     });
 
-    if(saveQuestions()) {
-        $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to ${subName} - ${setName}.`;
+    batch.commit().then(() => {
+        $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to the cloud.`;
         $("keyText").value = "";
-    }
+    }).catch((err) => {
+        $("keyMessage").textContent = "Error updating: " + err.message;
+    });
 };
 
+// 5. QUESTION BANK (DELETE FROM FIREBASE)
 $("bankBtn").onclick = () => {
   const box = $("bankContent"); box.innerHTML = "";
-  questions.forEach((q,i) => {
+  questions.forEach((q) => {
     const card = document.createElement("div"); card.className = "question";
     const ansText = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
     card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
-    const del = document.createElement("button"); del.textContent = "Delete"; del.className = "danger";
-    del.onclick = () => { if(confirm("Delete?")) { questions.splice(i,1); saveQuestions(); $("bankBtn").click(); } }; card.appendChild(del); box.appendChild(card);
+    
+    const del = document.createElement("button"); del.textContent = "Delete from Cloud"; del.className = "danger";
+    del.onclick = () => { 
+        if(confirm("Delete this question permanently from the cloud?")) { 
+            db.collection("questions").doc(q.id).delete().then(() => {
+                // The onSnapshot listener will automatically refresh the list
+            });
+        } 
+    }; 
+    card.appendChild(del); box.appendChild(card);
   });
   showPage("bankPage");
 };
@@ -385,7 +433,7 @@ $("nextBtn").onclick = () => {
 
 $("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
 
-// NEW: Dynamic comments and colors based on the score
+// 6. SAVE RESULTS TO FIREBASE
 function finishQuiz(){
   if(timerId) clearInterval(timerId);
   let score = 0, gradable = 0;
@@ -393,70 +441,31 @@ function finishQuiz(){
   
   const percent = gradable > 0 ? Math.round((score / gradable) * 100) : 0;
   
-  let comment = "";
-  let color = "";
-  if (percent >= 80) {
-      comment = "🏆 Excellent! You have mastered this topic.";
-      color = "#19d3c5"; // Green/Teal
-  } else if (percent >= 50) {
-      comment = "👍 Good effort! Keep practicing to improve.";
-      color = "#ff9800"; // Orange
-  } else {
-      comment = "⚠️ Needs Improvement. Don't give up!";
-      color = "#ff6577"; // Red
-  }
+  let comment = ""; let color = "";
+  if (percent >= 80) { comment = "🏆 Excellent! You have mastered this topic."; color = "#19d3c5"; } 
+  else if (percent >= 50) { comment = "👍 Good effort! Keep practicing to improve."; color = "#ff9800"; } 
+  else { comment = "⚠️ Needs Improvement. Don't give up!"; color = "#ff6577"; }
 
   $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
   $("score").textContent = gradable > 0 ? `Score: ${score} / ${gradable}` : "No answer key available";
   $("score").style.color = color;
-  
   $("percentage").innerHTML = gradable > 0 ? `Percentage: ${percent}%<br><span style="font-size:16px;">${comment}</span>` : "Ungraded questions";
   $("percentage").style.color = color;
+
+  // Save result to database (Only for exams, not practice)
+  if (mode === "exam" && gradable > 0) {
+      db.collection("results").add({
+          studentName: student.name,
+          school: student.school,
+          score: score,
+          total: gradable,
+          percentage: percent,
+          date: new Date().toISOString()
+      }).catch(e => console.log("Error saving result:", e));
+  }
   
   let reviewHtml = "";
   quiz.forEach((q,i) => {
     const ansTxt = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
     reviewHtml += `<div class="question">
       <p><strong>Q${i+1}: ${q.question}</strong></p>
-      <p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p>
-      <p class="small" style="color:#19d3c5;">Correct answer: ${ansTxt}</p>
-    </div>`;
-  });
-  $("review").innerHTML = reviewHtml;
-  
-  mode = ""; showPage("resultPage");
-}
-
-function refreshDropdowns(){
-  const sub = $("quizSubject").value;
-  
-  const setSelect = $("quizSet");
-  const currentSet = setSelect.value;
-  setSelect.innerHTML = `<option value="All">All Sets</option>`;
-  const sets = new Set();
-  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
-  [...sets].sort().forEach(s => setSelect.innerHTML += `<option value="${s}">${s}</option>`);
-  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
-
-  const topicSelect = $("quizTopic");
-  const currentTopic = topicSelect.value;
-  topicSelect.innerHTML = `<option value="All">All topics</option>`;
-  const topics = new Set();
-  questions.forEach(q => { 
-    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
-  });
-  [...topics].sort().forEach(t => topicSelect.innerHTML += `<option value="${t}">${t}</option>`);
-  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
-}
-
-$("quizSubject").onchange = refreshDropdowns;
-$("quizSet").onchange = refreshDropdowns;
-$("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
-$("menuResultBtn").onclick = () => showPage("menuPage");
-document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
-
-updateCount(); refreshDropdowns();
-})();
-</script>
-</body>
-</html>
