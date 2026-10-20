@@ -222,8 +222,13 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 const API_KEY = "smartExamGeminiKey";
-// UPDATED MODEL NAME TO gemini-3.8-flash
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=";
+
+// FALLBACK MODELS (If one is busy, try the next)
+const AI_MODELS = [
+  "gemini-2.0-flash",
+  "gemini-1.5-flash",
+  "gemini-1.5-flash-8b"
+];
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -306,27 +311,45 @@ C) ${q.options[2]}
 D) ${q.options[3]}
 
 Return a JSON object with exactly one key "answer" and a value of "A", "B", "C", or "D".`;
-  
-  const res = await fetch(GEMINI_URL + key, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json" }
-    })
-  });
-  
-  const data = await res.json();
-  if(data.error) throw new Error(data.error.message);
-  
-  const aiText = data.candidates[0].content.parts[0].text.trim();
-  const parsed = JSON.parse(aiText);
-  const answerLetter = parsed.answer.toUpperCase();
-  
-  if(["A","B","C","D"].includes(answerLetter)) {
-    return answerLetter.charCodeAt(0) - 65; 
+
+  let lastError = "All AI models are currently busy. Please try again in a minute.";
+
+  // Try each model one by one until one works
+  for (const model of AI_MODELS) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      
+      const data = await res.json();
+      if(data.error) throw new Error(data.error.message);
+      
+      const aiText = data.candidates[0].content.parts[0].text.trim();
+      const parsed = JSON.parse(aiText);
+      const answerLetter = parsed.answer.toUpperCase();
+      
+      if(["A","B","C","D"].includes(answerLetter)) {
+        return answerLetter.charCodeAt(0) - 65; 
+      }
+    } catch (err) {
+      console.warn(`Model ${model} failed:`, err.message);
+      lastError = err.message;
+      // If the API key is invalid, stop immediately (no point trying other models)
+      if (err.message.includes("API key not valid") || err.message.includes("API_KEY_INVALID")) {
+        throw new Error("Invalid API Key. Please check your Google AI Studio key.");
+      }
+      // Otherwise, the loop continues to the next model automatically
+    }
   }
-  return null;
+  
+  throw new Error(lastError);
 }
 
 async function getAIAnswer() {
