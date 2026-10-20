@@ -9,6 +9,7 @@
 
 <!-- FIREBASE SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 
 <style>
@@ -36,7 +37,6 @@ hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
 #loadingData { text-align:center; color:#19d3c5; font-weight:bold; margin:20px; }
-/* Teacher Dashboard Styles */
 .result-card { background: #192b48; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #19d3c5; }
 .result-card.fail { border-left-color: #ff6577; }
 .result-card.pass { border-left-color: #ff9800; }
@@ -88,7 +88,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="importBtn" class="secondary">📥 Import Questions</button>
 <button id="keyBtn" class="secondary" style="grid-column: span 2; background: #ff9800; color: white;">🔑 Apply Answer Key</button>
 <button id="bankBtn" class="secondary" style="grid-column: span 2;">🗂 Question Bank</button>
-<!-- TEACHER DASHBOARD BUTTON -->
 <button id="adminBtn" class="secondary" style="grid-column: span 2; background: #4caf50; color: white;">📊 Teacher Dashboard</button>
 </div>
 </section>
@@ -176,7 +175,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
-<!-- NEW TEACHER DASHBOARD PAGE -->
 <section id="adminPage" class="card hidden">
 <h2>📊 Teacher Dashboard</h2>
 <p class="small">Below are the recent exam results submitted by students.</p>
@@ -212,7 +210,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 (function(){
 "use strict";
 
-// 1. INITIALIZE FIREBASE
 const firebaseConfig = {
   apiKey: "AIzaSyC99Vp9s1PvuHkrtc3m9eg9I6rUeeOQEUg",
   authDomain: "smart-exam-platform-f2150.firebaseapp.com",
@@ -225,6 +222,13 @@ const firebaseConfig = {
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+
+// NEW: Sign in anonymously so we can write to the secure database
+auth.signInAnonymously().catch((error) => {
+  console.error("Auth Error:", error.code, error.message);
+  alert("Could not authenticate with the database. Make sure Anonymous sign-in is enabled.");
+});
 
 const $ = id => document.getElementById(id);
 const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage","adminPage","quizPage","resultPage"];
@@ -250,7 +254,6 @@ try{
   if(savedMinutes >= 1) minutes = savedMinutes;
 }catch(e){}
 
-// 2. LOAD DATA FROM FIREBASE IN REAL-TIME
 $("loadingData").classList.remove("hidden");
 db.collection("questions").onSnapshot((snapshot) => {
   questions = [];
@@ -311,7 +314,6 @@ $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage")
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
 
-// 3. TEACHER DASHBOARD LOGIC
 $("adminBtn").onclick = () => {
     const pin = prompt("Enter Teacher PIN:");
     if (pin === "1234") {
@@ -356,11 +358,10 @@ function loadStudentResults() {
     });
 }
 
-// Make delete function global so the inline onclick works
 window.deleteResult = function(id) {
     if(confirm("Delete this result permanently?")) {
         db.collection("results").doc(id).delete().then(() => {
-            loadStudentResults(); // Refresh list
+            loadStudentResults(); 
         });
     }
 };
@@ -573,7 +574,6 @@ $("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) retur
 $("menuResultBtn").onclick = () => showPage("menuPage");
 document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
 
-// ========== IMPORT LOGIC ==========
 function saveImportedQuestions(importedData) {
     if(!importedData.length) { $("importMessage").textContent = "No valid questions found."; return; }
     $("importMessage").textContent = "Uploading questions to cloud...";
