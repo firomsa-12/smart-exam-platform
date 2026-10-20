@@ -30,8 +30,6 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
-.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
 </style>
 </head>
 <body>
@@ -55,7 +53,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <p id="welcome"></p>
 <div class="info">Total Questions available: <strong id="count">0</strong></div>
 
-<!-- SUBJECT AND TOPIC RESTORED HERE -->
 <label for="quizSubject">Subject</label>
 <select id="quizSubject">
 <option value="All">All subjects</option>
@@ -116,7 +113,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <section id="importPage" class="card hidden">
 <h2>Import Questions</h2>
-<!-- SUBJECT RESTORED HERE FOR IMPORTING -->
 <label>Default subject for imported questions</label>
 <select id="importSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
@@ -144,9 +140,18 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <section id="keyPage" class="card hidden">
 <h2>🔑 Apply Answer Key</h2>
-<p class="small">Enter your answer key below (e.g., "1. A, 2. C, 3. B"). The app will find the matching questions in the set and apply the answers.</p>
+<p class="small">Enter your answer key below (e.g., "1. A, 2. C, 3. B"). The app will find the matching questions and apply the answers.</p>
+
+<!-- NEW: Subject Selection for Answer Key -->
+<label>Subject</label>
+<select id="keySubject">
+<option>Physics</option><option>Chemistry</option><option>Biology</option>
+<option>Mathematics</option><option>English</option><option>General</option>
+</select>
+
 <label>Set Name to apply answers to</label>
 <input id="keySetName" placeholder="e.g., Kinematics Test 1">
+
 <label>Paste Answer Key here</label>
 <textarea id="keyText" placeholder="1. A&#10;2. C&#10;3. B&#10;4. D"></textarea>
 <button id="applyKeyBtn">Apply Answers</button>
@@ -174,8 +179,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <section id="resultPage" class="card hidden">
 <h2>Results</h2>
 <div id="resultStudent" class="info"></div>
-<h1 id="score" style="text-align:center; font-size: 28px; color: #19d3c5;"></h1>
-<p id="percentage" style="text-align:center; font-size: 20px; margin-bottom: 20px;"></p>
+<h1 id="score" style="text-align:center; font-size: 28px;"></h1>
+<p id="percentage" style="text-align:center; font-size: 20px; margin-bottom: 20px; font-weight: bold;"></p>
 <div id="review"></div>
 <button id="menuResultBtn">Return to Menu</button>
 </section>
@@ -209,13 +214,21 @@ try{
   if(Array.isArray(saved)) questions = saved.filter(q => q && q.question).map(q => ({...q, subject: normalizeSubject(q.subject), setName: normalizeSet(q.setName), topic: normalizeTopic(q.topic)}));
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
   if(savedMinutes >= 1) minutes = savedMinutes;
-}catch(e){}
+}catch(e){ console.warn("Error loading saved data", e); }
 
+// NEW: Better save function with error handling
 function saveQuestions(){
-  localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
-  updateCount();
-  refreshDropdowns();
+  try {
+    localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
+    updateCount();
+    refreshDropdowns();
+    return true;
+  } catch(e) {
+    alert("⚠️ Error saving to browser. Your phone storage might be full. Please clear some browser data.");
+    return false;
+  }
 }
+
 function updateCount(){ $("count").textContent = questions.length; }
 
 function showPage(id){
@@ -244,7 +257,9 @@ $("saveQuestionBtn").onclick = function() {
     setName:normalizeSet($("addSet").value), 
     topic:normalizeTopic($("addTopic").value)
   });
-  saveQuestions(); $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); $("addMessage").textContent = "Question saved!";
+  if(saveQuestions()){
+    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); $("addMessage").textContent = "Question saved!";
+  }
 };
 
 $("continueBtn").onclick = login;
@@ -253,24 +268,30 @@ $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage")
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
 
+// NEW: Apply key now filters by BOTH Subject and Set Name
 $("applyKeyBtn").onclick = function() {
     const setName = normalizeSet($("keySetName").value);
+    const subName = normalizeSubject($("keySubject").value);
     const keyText = $("keyText").value;
     if(!keyText.trim()) { $("keyMessage").textContent = "Please paste the answer key."; return; }
+    
     const answersMap = {};
     const regex = /(\d+)\s*[.)\-:]?\s*([A-D])/gi;
     let match;
     while ((match = regex.exec(keyText)) !== null) { answersMap[match[1]] = normalizeAnswer(match[2]); }
+    
     let appliedCount = 0; let qIndex = 1;
     questions.forEach(q => {
-        if(q.setName === setName) {
+        if(q.setName === setName && q.subject === subName) {
             if(answersMap[qIndex] !== undefined) { q.answer = answersMap[qIndex]; appliedCount++; }
             qIndex++;
         }
     });
-    saveQuestions();
-    $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to the set "${setName}".`;
-    $("keyText").value = "";
+
+    if(saveQuestions()) {
+        $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to ${subName} - ${setName}.`;
+        $("keyText").value = "";
+    }
 };
 
 $("bankBtn").onclick = () => {
@@ -280,12 +301,11 @@ $("bankBtn").onclick = () => {
     const ansText = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
     card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
     const del = document.createElement("button"); del.textContent = "Delete"; del.className = "danger";
-    del.onclick = () => { questions.splice(i,1); saveQuestions(); $("bankBtn").click(); }; card.appendChild(del); box.appendChild(card);
+    del.onclick = () => { if(confirm("Delete?")) { questions.splice(i,1); saveQuestions(); $("bankBtn").click(); } }; card.appendChild(del); box.appendChild(card);
   });
   showPage("bankPage");
 };
 
-/* QUIZ ENGINE */
 function startQuiz(type) {
   const sub = $("quizSubject").value;
   const set = $("quizSet").value;
@@ -365,6 +385,7 @@ $("nextBtn").onclick = () => {
 
 $("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
 
+// NEW: Dynamic comments and colors based on the score
 function finishQuiz(){
   if(timerId) clearInterval(timerId);
   let score = 0, gradable = 0;
@@ -372,9 +393,25 @@ function finishQuiz(){
   
   const percent = gradable > 0 ? Math.round((score / gradable) * 100) : 0;
   
+  let comment = "";
+  let color = "";
+  if (percent >= 80) {
+      comment = "🏆 Excellent! You have mastered this topic.";
+      color = "#19d3c5"; // Green/Teal
+  } else if (percent >= 50) {
+      comment = "👍 Good effort! Keep practicing to improve.";
+      color = "#ff9800"; // Orange
+  } else {
+      comment = "⚠️ Needs Improvement. Don't give up!";
+      color = "#ff6577"; // Red
+  }
+
   $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
   $("score").textContent = gradable > 0 ? `Score: ${score} / ${gradable}` : "No answer key available";
-  $("percentage").textContent = gradable > 0 ? `Percentage: ${percent}%` : "Ungraded questions";
+  $("score").style.color = color;
+  
+  $("percentage").innerHTML = gradable > 0 ? `Percentage: ${percent}%<br><span style="font-size:16px;">${comment}</span>` : "Ungraded questions";
+  $("percentage").style.color = color;
   
   let reviewHtml = "";
   quiz.forEach((q,i) => {
@@ -393,7 +430,6 @@ function finishQuiz(){
 function refreshDropdowns(){
   const sub = $("quizSubject").value;
   
-  // Update Sets
   const setSelect = $("quizSet");
   const currentSet = setSelect.value;
   setSelect.innerHTML = `<option value="All">All Sets</option>`;
@@ -402,7 +438,6 @@ function refreshDropdowns(){
   [...sets].sort().forEach(s => setSelect.innerHTML += `<option value="${s}">${s}</option>`);
   if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
 
-  // Update Topics
   const topicSelect = $("quizTopic");
   const currentTopic = topicSelect.value;
   topicSelect.innerHTML = `<option value="All">All topics</option>`;
