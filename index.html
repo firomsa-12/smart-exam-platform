@@ -127,7 +127,7 @@ window.addEventListener("error", function(event) {
 <div class="info">
   <strong>🤖 AI Auto-Answer (Google Gemini)</strong>
   <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
-  <input id="apiKey" type="password" placeholder="Paste Google Gemini API Key here (AIza...)">
+  <input id="apiKey" type="password" placeholder="Paste Google API Key here (starts with AIza...)">
   <button id="aiAnswerBtn" class="secondary" type="button">Ask AI for Correct Answer</button>
 </div>
 
@@ -222,8 +222,7 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 const API_KEY = "smartExamGeminiKey";
-// UPDATED TO GOOGLE GEMINI STABLE MODEL
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -297,6 +296,7 @@ function addQuestion(){
   }
 }
 
+/* --- ROBUST GOOGLE GEMINI INTEGRATION --- */
 async function getAIAnswerForSingle(q, key) {
   const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
 Question: ${q.question}
@@ -305,33 +305,37 @@ B) ${q.options[1]}
 C) ${q.options[2]}
 D) ${q.options[3]}
 
-Return a JSON object with exactly one key "answer" and a value of "A", "B", "C", or "D".`;
+Reply with ONLY the correct option letter: A, B, C, or D.`;
   
   const res = await fetch(GEMINI_URL + key, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { responseMimeType: "application/json" }
+      contents: [{ parts: [{ text: prompt }] }]
     })
   });
   
   const data = await res.json();
   if(data.error) throw new Error(data.error.message);
   
-  const aiText = data.candidates[0].content.parts[0].text.trim();
-  const parsed = JSON.parse(aiText);
-  const answerLetter = parsed.answer.toUpperCase();
-  
-  if(["A","B","C","D"].includes(answerLetter)) {
-    return answerLetter.charCodeAt(0) - 65; 
+  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts[0].text) {
+      throw new Error("Google blocked the response or returned empty data.");
   }
-  return null;
+
+  const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+  const match = aiText.match(/[A-D]/);
+  
+  if(match) {
+    return match[0].charCodeAt(0) - 65; 
+  }
+  throw new Error("AI replied, but didn't give a clear A, B, C, or D. It said: " + aiText);
 }
 
 async function getAIAnswer() {
   const key = $("apiKey").value.trim();
-  if(!key) { alert("Please enter your Gemini API key first."); return; }
+  if(!key) { alert("Please enter your Google API key first."); return; }
+  if(!key.startsWith("AIza")) { alert("This doesn't look like a Google API key. It usually starts with 'AIza'."); }
+  
   localStorage.setItem(API_KEY, key);
 
   const q = $("qText").value.trim();
@@ -347,8 +351,6 @@ async function getAIAnswer() {
       const letter = String.fromCharCode(65 + ansIndex);
       $("correct").value = ansIndex;
       $("addMessage").textContent = "✅ AI found the answer: Option " + letter;
-    } else {
-      $("addMessage").textContent = "❌ AI could not determine a clear answer.";
     }
   } catch (err) {
     $("addMessage").textContent = "❌ AI Error: " + err.message;
