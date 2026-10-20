@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Exam Platform</title>
+
+<!-- These libraries are used only when importing PDF and DOCX files. Internet is required for them to load. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:#081225;color:#f0f5ff;font-family:Arial,sans-serif}
+.container{max-width:750px;margin:auto}
+header{text-align:center;padding:20px 0}
+h1,h2{color:#19d3c5}
+.card{background:#111f38;border:1px solid #2b405f;border-radius:14px;padding:20px;margin-bottom:16px}
+label{display:block;margin:14px 0 6px;color:#b9c9df}
+input,textarea,select{width:100%;padding:12px;border:1px solid #38506e;border-radius:8px;background:#09162b;color:white;font-size:16px}
+textarea{min-height:90px}
+button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;background:#19d3c5;color:#081225;font-size:15px;font-weight:bold;cursor:pointer}
+.secondary{background:#3988ff;color:white}
+.danger{background:#ff6577;color:white}
+.hidden{display:none!important}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.info{background:#192b48;padding:12px;border-radius:8px;margin:12px 0;line-height:1.5}
+.option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0}
+.option input{width:auto}
+.small{color:#b9c9df;font-size:13px;line-height:1.5}
+.timer{text-align:center;color:#19d3c5;font-size:24px;font-weight:bold;margin:15px}
+.question{background:#192b48;padding:15px;border-radius:10px;margin:12px 0}
+hr{border:0;border-top:1px solid #38506e;margin:20px 0}
+#jsonFile{margin-top:8px}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:450px){.grid{grid-template-columns:1fr}}
+a{color:#19d3c5;overflow-wrap:anywhere}a:hover{color:#ffffff}</style>
+</head>
+<body>
+<div class="container">
+
+<div id="appError" class="card" style="display:none;border:2px solid #ff6577"><h2 style="color:#ff6577">A problem occurred</h2><p class="small">The page loaded, but part of the app could not start. Refresh the page. If it continues, send the message below for troubleshooting.</p><pre id="appErrorText"></pre></div>
+<script>
+window.addEventListener("error",function(event){var box=document.getElementById("appError"),text=document.getElementById("appErrorText");if(box&&text){box.style.display="block";text.textContent=(event.message||"Unknown JavaScript error")+(event.filename?"\nFile: "+event.filename:"")+(event.lineno?"\nLine: "+event.lineno:"");}});
+window.addEventListener("unhandledrejection",function(event){var box=document.getElementById("appError"),text=document.getElementById("appErrorText");if(box&&text){box.style.display="block";text.textContent="App error: "+String(event.reason||"Unknown error");}});
+</script>
+<header>
+<h1>🎓 SMART EXAM PLATFORM</h1>
+<p class="small">Learn · Practice · Test Your Knowledge</p>
+</header>
+
+<section id="loginPage" class="card">
+<h2>Student Login</h2>
+<label for="studentName">Student Name</label>
+<input id="studentName" placeholder="Enter your full name">
+<label for="schoolName">School Name</label>
+<input id="schoolName" placeholder="Enter your school name">
+<button id="continueBtn" type="button">Continue →</button>
+<p id="loginMessage" class="small"></p>
+</section>
+
+<section id="menuPage" class="card hidden">
+<h2>Student Dashboard</h2>
+<p id="welcome"></p>
+<div class="info">Questions available: <strong id="count">0</strong></div>
+<div class="info" role="status">Offline-friendly mode: questions are saved in this browser. Share exam files through Telegram.</div>
+<label for="quizSubject">Subject for examination / practice</label>
+<select id="quizSubject">
+<option value="All">All subjects</option>
+<option>Physics</option><option>Chemistry</option><option>Biology</option>
+<option>Mathematics</option><option>English</option><option>General</option>
+</select>
+<label for="quizTopic">Topic</label>
+<select id="quizTopic"><option value="All">All topics</option></select>
+<div class="grid">
+<button id="examBtn">📝 Start Examination</button>
+<button id="practiceBtn" class="secondary">📚 Start Practice</button>
+<button id="addBtn" class="secondary">➕ Add Questions</button>
+<button id="importBtn" class="secondary">📥 Import Questions</button>
+<button id="bankBtn" class="secondary">🗂 Question Bank</button>
+</div>
+<div class="info" style="margin-top:16px">
+  <strong>🌐 Share with your Telegram group</strong>
+  <p class="small">Publish this HTML website once, then share its link in Telegram. Share exam files separately; each student imports the file into their own browser.</p>
+  <p><a href="https://pages.github.com/" target="_blank" rel="noopener noreferrer">GitHub Pages — publish your website</a></p>
+  <p><a href="https://app.netlify.com/drop" target="_blank" rel="noopener noreferrer">Netlify Drop — publish your website</a></p>
+  <p class="small">Questions and results are stored separately on each device. This version does not synchronize scores between students.</p>
+</div>
+</section>
+
+<section id="addPage" class="card hidden">
+<h2>Add Questions</h2>
+<label for="addSubject">Subject</label>
+<select id="addSubject">
+<option>Physics</option><option>Chemistry</option><option>Biology</option>
+<option>Mathematics</option><option>English</option><option>General</option>
+</select>
+<label for="addTopic">Topic (choose one or type a new topic)</label>
+<input id="addTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
+<datalist id="topicSuggestions"></datalist>
+<label for="duration">Examination duration (minutes)</label>
+<input id="duration" type="number" min="1" max="600" value="30">
+<button id="saveDurationBtn" class="secondary">Save Time Limit</button>
+<p id="durationMessage" class="small"></p>
+<hr>
+<label for="qText">Question</label>
+<textarea id="qText" placeholder="Enter your question"></textarea>
+<label for="a">Option A</label><input id="a" placeholder="Option A">
+<label for="b">Option B</label><input id="b" placeholder="Option B">
+<label for="c">Option C</label><input id="c" placeholder="Option C">
+<label for="d">Option D</label><input id="d" placeholder="Option D">
+<label for="correct">Correct answer</label>
+<select id="correct">
+<option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
+</select>
+<button id="saveQuestionBtn">Save Question</button>
+<p id="addMessage" class="small"></p>
+<button class="backBtn secondary">← Back to Menu</button>
+</section>
+
+<section id="importPage" class="card hidden">
+<h2>Import Questions</h2>
+<label for="importSubject">Default subject for imported questions</label>
+<select id="importSubject">
+<option>Physics</option><option>Chemistry</option><option>Biology</option>
+<option>Mathematics</option><option>English</option><option>General</option>
+</select>
+<label for="importTopic">Default topic (used if automatic topic detection cannot identify one)</label>
+<input id="importTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
+<p class="small">
+Import a JSON file or choose a TXT, text-based PDF, or DOCX Word document. Questions will be classified automatically using topic keywords, then you can review and correct every topic before saving.
+First choose the document's subject above (Physics, Chemistry, Biology, Mathematics, English, or General), then import it. Questions extracted from that document will be categorized under the selected subject unless a JSON question specifies its own subject. When a student starts an exam or practice session, they can select the subject on the dashboard.
+Each question needs four options (A–D). Correct answers can appear with each question or in an answer key at the end.
+If no answer is supplied, the question is imported as ungraded until an answer key is added.
+For text documents, use numbered questions and options such as A. option, B. option, C. option, D. option.
+</p>
+<div class="info">
+<strong>JSON example:</strong>
+<pre style="color:#19d3c5">[
+  {
+    "question": "2 + 2?",
+    "options": ["3", "4", "5", "6"],
+    "answer": 1,
+    "subject": "Mathematics"
+  }
+]</pre>
+<strong>Text example:</strong>
+<pre style="color:#19d3c5">1. What is 2 + 2?
+A. 3
+B. 4
+C. 5
+D. 6
+
+2. Which planet is known as the Red Planet?
+A. Earth
+B. Venus
+C. Mars
+D. Jupiter
+
+Answer key:
+1. B
+2. C</pre>
+</div>
+<label for="jsonText">Paste JSON questions</label>
+<textarea id="jsonText" placeholder="Paste your complete JSON questions here"></textarea>
+<button id="importTextBtn">Import Pasted JSON</button>
+<hr>
+<label for="jsonFile">Choose a JSON, TXT, PDF, or Word (.docx) file</label>
+<input type="file" id="jsonFile" accept=".json,.txt,.pdf,.docx,application/json,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+<p id="selectedFile" class="small">No file selected.</p>
+<button id="chooseFileBtn" class="secondary" type="button">Choose File</button>
+<button id="importFileBtn" class="secondary" type="button">Import Selected File</button>
+<p id="importMessage" class="small" role="status" aria-live="polite"></p>
+<div id="importPreview" class="hidden"></div>
+<button id="saveReviewedBtn" class="hidden">Approve and Save Questions</button>
+<button id="saveAndStartBtn" class="secondary hidden" type="button">Approve, Save & Start Examination</button>
+<button id="cancelReviewBtn" class="secondary hidden">Cancel Import Review</button>
+<button class="backBtn secondary">← Back to Menu</button>
+</section>
+
+<section id="bankPage" class="card hidden">
+<h2>Question Bank</h2>
+<div id="bankContent"></div>
+<button class="backBtn secondary">← Back to Menu</button>
+</section>
+
+<section id="quizPage" class="card hidden">
+<h2 id="quizHeading">Examination</h2>
+<div id="timer" class="timer"></div>
+<p id="position" class="small"></p>
+<div id="quizContent"></div>
+<p id="quizMessage" class="small"></p>
+<button id="nextBtn">Next Question →</button>
+<button id="submitBtn" class="danger hidden">Submit Examination</button>
+</section>
+
+<section id="resultPage" class="card hidden">
+<h2>Results</h2>
+<div id="resultStudent" class="info"></div>
+<h1 id="score" style="text-align:center"></h1>
+<p id="percentage" style="text-align:center"></p>
+<div id="review"></div>
+<button id="menuResultBtn">Return to Menu</button>
+</section>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+const $ = id => document.getElementById(id);
+const pages = ["loginPage","menuPage","addPage","importPage","bankPage","quizPage","resultPage"];
+
+let questions = [];
+let student = {name:"",school:""};
+let minutes = 30;
+let quiz = [];
+let answers = [];
+let index = 0;
+let mode = "";
+let seconds = 0;
+let timerId = null;
+let locked = false;
+let pendingImports = [];
+let startAfterImport = false;
+const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
+const TOPIC_SEEDS = {
+  Physics: ["Projectile Motion","Rotational Motion","Electrostatics","Work and Energy","Momentum","Waves","Electricity","Magnetism","Mechanics","Optics","Thermodynamics"],
+  Chemistry: ["Acid–Base Titration","Electrolysis","Chemical Equilibrium","Organic Chemistry","Atomic Structure","Chemical Bonding","Reaction Rates","Redox Reactions","Stoichiometry"],
+  Biology: ["Genetics","Cell Biology","Evolution","Ecology","Human Physiology","Microbiology","Reproduction","Molecular Biology"],
+  Mathematics: ["Algebra","Geometry","Trigonometry","Calculus","Statistics","Probability","Vectors","Functions"],
+  English: ["Grammar","Vocabulary","Reading Comprehension","Writing","Sentence Structure","Analogies"],
+  General: ["General"]
+};
+
+const QUESTIONS_KEY = "smartExamFixedQuestions";
+const MINUTES_KEY = "smartExamFixedMinutes";
+
+/* Answers may be null when the source document does not provide an answer key. */
+function normalizeSubject(value){
+  const allowed = ["Physics","Chemistry","Biology","Mathematics","English","General"];
+  return allowed.includes(value) ? value : "General";
+}
+
+function normalizeTopic(value, subject){
+  const topic = String(value || "").trim();
+  return topic || "General";
+}
+
+function topicOptionsFor(subject){
+  const set = new Set((TOPIC_SEEDS[subject] || ["General"]).slice());
+  questions.filter(q => normalizeSubject(q.subject) === subject).forEach(q => set.add(normalizeTopic(q.topic, subject)));
+  return [...set].sort((a,b) => a.localeCompare(b));
+}
+
+function normalizeQuestionText(value){
+  return String(value || "").toLowerCase()
+    .normalize("NFKD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," ");
+}
+
+function similarityScore(a,b){
+  const A = new Set(normalizeQuestionText(a).split(" ").filter(w => w.length > 2));
+  const B = new Set(normalizeQuestionText(b).split(" ").filter(w => w.length > 2));
+  if(!A.size || !B.size) return 0;
+  let common = 0;
+  A.forEach(w => { if(B.has(w)) common++; });
+  return common / (A.size + B.size - common);
+}
+
+function duplicateStatus(q){
+  const exact = questions.find(existing =>
+    normalizeQuestionText(existing.question) === normalizeQuestionText(q.question) &&
+    existing.options.map(normalizeQuestionText).join("|") === q.options.map(normalizeQuestionText).join("|")
+  );
+  if(exact) return {kind:"exact", message:"Possible exact duplicate of an existing question."};
+  const similar = questions.reduce((best,existing) => {
+    const score = similarityScore(existing.question, q.question);
+    return score > best.score ? {score, question:existing.question} : best;
+  }, {score:0,question:""});
+  if(similar.score >= 0.72) return {kind:"similar", message:"Possibly similar to an existing question: “" + similar.question + "”"};
+  return {kind:"none",message:"No likely duplicate detected."};
+}
+
+function autoClassifyTopic(question, subject, fallback){
+  const text = normalizeQuestionText(question);
+  const rules = {
+    Physics: [
+      ["Projectile Motion", /projectile|maximum height|horizontal range|time of flight|launch angle/],
+      ["Rotational Motion", /torque|angular velocity|angular acceleration|moment of inertia|rotational|angular momentum/],
+      ["Electrostatics", /electroscope|electric charge|coulomb|electric field|charged object|static electricity/],
+      ["Work and Energy", /work done|kinetic energy|potential energy|conservation of energy|power/],
+      ["Momentum", /momentum|impulse|collision/],
+      ["Waves", /wave|frequency|wavelength|sound wave|amplitude/],
+      ["Electricity", /current|voltage|resistance|ohm|circuit|electrical power/],
+      ["Magnetism", /magnetic field|magnetism|electromagnetic induction/],
+      ["Optics", /lens|mirror|refraction|reflection|focal length/],
+      ["Thermodynamics", /temperature|heat transfer|thermodynamic|specific heat/],
+      ["Mechanics", /acceleration|velocity|displacement|newton.s law|force|friction|free fall/]
+    ],
+    Chemistry: [
+      ["Acid–Base Titration", /titration|equivalence point|indicator|endpoint|acid base/],
+      ["Electrolysis", /electrolysis|electrolytic|cathode|anode|electroplating|molten/],
+      ["Chemical Equilibrium", /equilibrium|le chatelier|equilibrium constant/],
+      ["Organic Chemistry", /alkane|alkene|alkyne|functional group|ester|aldehyde|organic compound/],
+      ["Atomic Structure", /isotope|proton|neutron|electron configuration|atomic number/],
+      ["Chemical Bonding", /ionic bond|covalent bond|lewis structure|bond polarity/],
+      ["Reaction Rates", /reaction rate|catalyst|activation energy/],
+      ["Redox Reactions", /oxidation|reduction|oxidizing agent|reducing agent|redox/],
+      ["Stoichiometry", /mole|molar mass|limiting reagent|stoichiometry/]
+    ],
+    Biology: [
+      ["Genetics", /gene|allele|genotype|phenotype|dihybrid|monohybrid|inheritance|dna replication/],
+      ["Cell Biology", /organelle|mitochondria|ribosome|cell membrane|cytoplasm|cell division/],
+      ["Evolution", /natural selection|evolution|adaptation|fossil/],
+      ["Ecology", /ecosystem|food chain|population|biodiversity|ecology/],
+      ["Human Physiology", /heart|blood|respiration|digestion|nervous system|hormone/],
+      ["Microbiology", /bacteria|virus|fungi|microorganism|pathogen/],
+      ["Reproduction", /fertilization|embryo|reproduction|menstrual/],
+      ["Molecular Biology", /transcription|translation|rna|nucleotide|protein synthesis/]
+    ],
+    Mathematics: [
+      ["Algebra", /equation|polynomial|factorize|inequality|quadratic/],
+      ["Geometry", /triangle|circle|angle|polygon|area|perimeter/],
+      ["Trigonometry", /sine|cosine|tangent|trigonometric/],
+      ["Calculus", /derivative|differentiate|integral|integration|limit/],
+      ["Statistics", /mean|median|mode|standard deviation/],
+      ["Probability", /probability|random event/],
+      ["Vectors", /vector|magnitude|dot product/],
+      ["Functions", /function|domain|range|inverse function/]
+    ],
+    English: [
+      ["Grammar", /tense|verb|adverb|adjective|preposition|conjunction|passive voice|tag question/],
+      ["Vocabulary", /synonym|antonym|meaning of|closest in meaning/],
+      ["Reading Comprehension", /according to the passage|passage|main idea/],
+      ["Sentence Structure", /sentence|clause|relative pronoun|inversion/],
+      ["Analogies", /analogy|analogies|is to.*as/]
+    ]
+  };
+  for(const [topic,pattern] of (rules[subject] || [])){
+    if(pattern.test(text)) return topic;
+  }
+  return normalizeTopic(fallback, subject);
+}
+
+function isValidSavedQuestion(q){
+  return !!q &&
+    typeof q.question === "string" &&
+    Array.isArray(q.options) &&
+    q.options.length === 4 &&
+    q.options.every(o => typeof o === "string") &&
+    (q.answer === null || (Number.isInteger(q.answer) && q.answer >= 0 && q.answer <= 3));
+}
+
+/* Load saved questions and time limit. */
+try{
+  const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
+  if(Array.isArray(saved)) {
+    questions = saved.filter(isValidSavedQuestion).map(q => ({
+      ...q,
+      subject: normalizeSubject(q.subject),
+      topic: normalizeTopic(q.topic, normalizeSubject(q.subject))
+    }));
+  }
+  const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
+  if(Number.isInteger(savedMinutes) && savedMinutes >= 1 && savedMinutes <= 600) minutes = savedMinutes;
+}catch(e){
+  console.warn("Could not load saved data.",e);
+}
+
+function saveQuestions(){
+  try{
+    localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
+    updateCount();
+    return true;
+  }catch(e){
+    alert("Could not save questions. Your device storage may be full or unavailable.");
+    return false;
+  }
+}
+function updateCount(){ $("count").textContent = questions.length; }
+
+function showPage(id){
+  if(mode === "exam" && !$("quizPage").classList.contains("hidden") &&
+     id !== "quizPage" && id !== "resultPage"){
+    $("quizMessage").textContent = "Finish the examination before leaving this page.";
+    return;
+  }
+  pages.forEach(p => $(p).classList.add("hidden"));
+  $(id).classList.remove("hidden");
+  updateCount();
+}
+
+function login(){
+  const name = $("studentName").value.trim();
+  const school = $("schoolName").value.trim();
+  if(!name || !school){
+    $("loginMessage").textContent = "Please enter both your name and school.";
+    return;
+  }
+  student = {name,school};
+  $("welcome").textContent = "Welcome, " + name + " · " + school;
+  $("loginMessage").textContent = "";
+  showPage("menuPage");
+}
+
+function saveDuration(){
+  const value = Number($("duration").value);
+  if(!Number.isInteger(value) || value < 1 || value > 600){
+    $("durationMessage").textContent = "Enter a whole number from 1 to 600.";
+    return;
+  }
+  try{
+    localStorage.setItem(MINUTES_KEY,String(value));
+    minutes = value;
+    $("durationMessage").textContent = "Time limit saved: " + minutes + " minutes.";
+  }catch(e){
+    $("durationMessage").textContent = "Could not save the time limit on this device.";
+  }
+}
+
+function addQuestion(){
+  const q = $("qText").value.trim();
+  const opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
+  if(!q || opts.some(x => !x)){
+    $("addMessage").textContent = "Complete the question and all four choices.";
+    return;
+  }
+  questions.push({
+    question:q,
+    options:opts,
+    answer:Number($("correct").value),
+    subject:normalizeSubject($("addSubject").value),
+    topic:normalizeTopic($("addTopic").value, $("addSubject").value)
+  });
+  if(!saveQuestions()){ questions.pop(); return; }
+  $("qText").value = "";
+  ["a","b","c","d"].forEach(id => $(id).value = "");
+  $("correct").value = "0";
+  $("addMessage").textContent = "Question saved successfully!";
+  refreshTopicSuggestions();
+}
+
+/* Convert answer letters or numeric answer indexes to the internal 0–3 format. */
+function normalizeAnswer(value, questionNumber){
+  if(value === null || value === undefined || String(value).trim() === "") return null;
+  if(typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 3) return value;
+  const text = String(value).trim().toUpperCase().replace(/[.)]$/,"");
+  if(["A","B","C","D"].includes(text)) return text.charCodeAt(0)-65;
+  if(/^[0-3]$/.test(text)) return Number(text);
+  throw Error("Question " + questionNumber + " has an invalid answer. Use A, B, C, D, or 0–3.");
+}
+
+function cleanImported(data, defaultSubject){
+  if(!Array.isArray(data) || data.length === 0) throw Error("The JSON must contain a non-empty array of questions.");
+  return data.map((q,i) => {
+    if(!q || typeof q !== "object") throw Error("Question " + (i+1) + " is not a valid object.");
+    if(typeof q.question !== "string" || !Array.isArray(q.options))
+      throw Error("Question " + (i+1) + " needs a question and an options array.");
+    if(q.options.length !== 4 || !q.options.every(o => typeof o === "string"))
+      throw Error("Question " + (i+1) + " must have exactly four text options.");
+    if(!q.question.trim() || q.options.some(o => !o.trim()))
+      throw Error("Question " + (i+1) + " contains an empty field.");
+    return {
+      question:q.question.trim(),
+      options:q.options.map(o => o.trim()),
+      answer:normalizeAnswer(q.answer,i+1),
+      subject:normalizeSubject(q.subject || defaultSubject),
+      topic:String(q.topic || "").trim()
+    };
+  });
+}
+
+function parseQuestionJSON(text){
+  if(!text || !text.trim()) throw Error("Please paste JSON data or select a file first.");
+  try{return JSON.parse(text);}
+  catch(e){throw Error("The JSON is incomplete or invalid. Check that the entire JSON, including its brackets, was copied.");}
+}
+
+function stageImported(imported, defaultSubject, defaultTopic){
+  if(!imported.length) throw Error("No complete questions were found. Use numbered questions, four A–D options, and an optional answer key.");
+  pendingImports = imported.map((q) => {
+    const subject = normalizeSubject(q.subject || defaultSubject);
+    const autoTopic = autoClassifyTopic(q.question, subject, q.topic || defaultTopic);
+    return {...q, subject, topic:autoTopic, duplicate:duplicateStatus(q)};
+  });
+  renderImportPreview();
+  $("importMessage").textContent = "Review " + pendingImports.length + " question(s). Check the subject, topic, and duplicate warnings before saving.";
+  $("saveReviewedBtn").classList.remove("hidden");
+  $("saveAndStartBtn").classList.remove("hidden");
+  $("cancelReviewBtn").classList.remove("hidden");
+}
+
+function addImportedQuestions(rawText, defaultSubject){
+  const cleaned = cleanImported(parseQuestionJSON(rawText), defaultSubject);
+  stageImported(cleaned, defaultSubject, $("importTopic").value);
+  return cleaned.length;
+}
+
+function importText(){
+  try{
+    const count = addImportedQuestions($("jsonText").value, $("importSubject").value);
+    if(count === false) return;
+    $("jsonText").value = "";
+  }catch(e){
+    $("importMessage").textContent = "Import error: " + e.message;
+  }
+}
+
+function renderImportPreview(){
+  const box = $("importPreview");
+  box.replaceChildren();
+  box.classList.remove("hidden");
+  pendingImports.forEach((q,i) => {
+    const card = document.createElement("div");
+    card.className = "question";
+    const title = document.createElement("h3");
+    title.textContent = (i+1) + ". " + q.question;
+    card.appendChild(title);
+    const subjectLabel = document.createElement("label");
+    subjectLabel.textContent = "Subject";
+    const subjectSelect = document.createElement("select");
+    subjectSelect.dataset.index = String(i);
+    subjectSelect.dataset.field = "subject";
+    SUBJECTS.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s; opt.textContent = s; opt.selected = s === q.subject;
+      subjectSelect.appendChild(opt);
+    });
+    card.appendChild(subjectLabel); card.appendChild(subjectSelect);
+
+    const topicLabel = document.createElement("label");
+    topicLabel.textContent = "Topic (auto-detected; you can correct it)";
+    const topicInput = document.createElement("input");
+    topicInput.value = q.topic;
+    topicInput.setAttribute("list","topicSuggestions");
+    topicInput.dataset.index = String(i);
+    topicInput.dataset.field = "topic";
+    card.appendChild(topicLabel); card.appendChild(topicInput);
+
+    const duplicate = document.createElement("p");
+    duplicate.className = "small";
+    duplicate.textContent = q.duplicate.message;
+    if(q.duplicate.kind !== "none") duplicate.style.color = "#ffb86b";
+    card.appendChild(duplicate);
+
+    const skipLabel = document.createElement("label");
+    skipLabel.className = "option";
+    const skip = document.createElement("input");
+    skip.type = "checkbox";
+    skip.checked = q.duplicate.kind === "exact";
+    skip.dataset.index = String(i);
+    skip.dataset.field = "skip";
+    skipLabel.appendChild(skip);
+    skipLabel.appendChild(document.createTextNode(" Skip this question (recommended for exact duplicates)"));
+    card.appendChild(skipLabel);
+    box.appendChild(card);
+  });
+}
+
+function saveReviewedImports(){
+  const box = $("importPreview");
+  box.querySelectorAll("[data-field='subject']").forEach(el => {
+    const i = Number(el.dataset.index);
+    pendingImports[i].subject = normalizeSubject(el.value);
+  });
+  box.querySelectorAll("[data-field='topic']").forEach(el => {
+    const i = Number(el.dataset.index);
+    pendingImports[i].topic = normalizeTopic(el.value, pendingImports[i].subject);
+  });
+  const skipped = new Set([...box.querySelectorAll("[data-field='skip']:checked")].map(el => Number(el.dataset.index)));
+  const accepted = pendingImports.filter((q,i) => !skipped.has(i));
+  if(!accepted.length){
+    $("importMessage").textContent = "No questions were saved because all were skipped.";
+    clearImportReview();
+    return;
+  }
+  const previousQuestions = questions.slice();
+  questions = questions.concat(accepted.map(({duplicate,...q}) => q));
+  if(!saveQuestions()){
+    questions = previousQuestions;
+    updateCount();
+    return;
+  }
+  const skippedCount = pendingImports.length - accepted.length;
+  const importedSubject = normalizeSubject($("importSubject").value);
+  const shouldStart = startAfterImport;
+  startAfterImport = false;
+  $("importMessage").textContent = "Saved " + accepted.length + " question(s)." + (skippedCount ? " Skipped " + skippedCount + " question(s)." : "");
+  clearImportReview();
+  if(shouldStart){
+    $("quizSubject").value = importedSubject;
+    refreshQuizTopics();
+    $("quizTopic").value = "All";
+    showPage("menuPage");
+    startQuiz("exam");
+  }
+}
+
+function clearImportReview(){
+  pendingImports = [];
+  $("importPreview").replaceChildren();
+  $("importPreview").classList.add("hidden");
+  $("saveReviewedBtn").classList.add("hidden");
+  $("saveAndStartBtn").classList.add("hidden");
+  $("cancelReviewBtn").classList.add("hidden");
+}
+
+/*
+  Document parser:
+  - Supports numbered questions with A–D options.
+  - Supports answer labels within a question (Answer: B) or an answer key at the end.
+  - Accepts option labels on separate lines or in a single line when spaces clearly separate them.
+  - If an answer is missing, it is stored as null rather than guessing.
+*/
+function parseDocumentQuestions(rawText, defaultSubject){
+  if(!rawText || !rawText.trim()) throw Error("The file contains no readable text.");
+  let text = rawText
+    .replace(/\u00a0/g," ")
+    .replace(/\r/g,"\n")
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'")
+    .replace(/[ \t]+/g," ");
+
+  /* Separate common inline option labels into their own lines. */
+  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
+  /* Separate numbered questions that appear on the same extracted PDF line. */
+  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
+
+  const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
+  const answerKey = Object.create(null);
+  const questionChunks = [];
+  let current = null;
+  let readingAnswerKey = false;
+
+  const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
+  const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
+  const answerLine = /^(?:correct\s+)?answer\s*(?:for\s*(?:question\s*)?)?(\d{1,4})?\s*[:\-.)]?\s*([A-D]|[0-3])\s*$/i;
+  const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
+  const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
+
+  function finishCurrent(){
+    if(current){
+      questionChunks.push(current);
+      current = null;
+    }
+  }
+
+  for(const line of lines){
+    if(keyHeader.test(line)){
+      finishCurrent();
+      readingAnswerKey = true;
+      continue;
+    }
+
+    if(readingAnswerKey){
+      const k = keyItem.exec(line);
+      if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2],Number(k[1])); continue; }
+      /* Also handle lines like "1-B, 2-C, 3-D". */
+      const matches = [...line.matchAll(/(?:^|[,;\s])(\d{1,4})\s*[-:.)]\s*([A-D]|[0-3])(?=$|[,;\s])/gi)];
+      if(matches.length){
+        matches.forEach(m => answerKey[Number(m[1])] = normalizeAnswer(m[2],Number(m[1])));
+        continue;
+      }
+      /* An unrecognized line after an answer-key heading may be a wrapped key line. */
+      const pairs = [...line.matchAll(/(\d{1,4})\s*[-:.)]\s*([A-D]|[0-3])/gi)];
+      if(pairs.length){
+        pairs.forEach(m => answerKey[Number(m[1])] = normalizeAnswer(m[2],Number(m[1])));
+        continue;
+      }
+      readingAnswerKey = false;
+    }
+
+    const qMatch = questionStart.exec(line);
+    if(qMatch){
+      finishCurrent();
+      current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null};
+      continue;
+    }
+
+    if(!current) continue;
+
+    const opt = optionLine.exec(line);
+    if(opt){
+      const letterIndex = opt[1].toUpperCase().charCodeAt(0)-65;
+      current.options[letterIndex] = opt[2].trim();
+      continue;
+    }
+
+    const inlineAnswer = /^(?:correct\s+)?answer\s*[:\-]\s*([A-D]|[0-3])\s*$/i.exec(line);
+    if(inlineAnswer){
+      current.answer = normalizeAnswer(inlineAnswer[1],current.number);
+      continue;
+    }
+
+    /* A line that is not an option is part of the question, unless it is a stray answer-key entry. */
+    current.parts.push(line);
+  }
+  finishCurrent();
+
+  /* A fallback parser for documents where question numbers are not on separate lines,
+     but option labels have been separated by the normalizer above. */
+  if(!questionChunks.length){
+    throw Error("No numbered questions were detected. Number each question (for example, 1. Question text) and label the four choices A., B., C., and D.");
+  }
+
+  const imported = [];
+  for(const item of questionChunks){
+    const opts = item.options;
+    if(opts.length !== 4 || [0,1,2,3].some(i => typeof opts[i] !== "string" || !opts[i].trim())){
+      throw Error("Question " + item.number + " does not have all four options A–D. Check the document formatting.");
+    }
+    const qText = item.parts.join(" ").replace(/\s+/g," ").trim();
+    if(!qText) throw Error("Question " + item.number + " has no question text.");
+    const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number)
+      ? answerKey[item.number] : item.answer;
+    imported.push({
+      question:qText,
+      options:opts.map(s=>s.trim()),
+      answer,
+      subject:normalizeSubject(defaultSubject)
+    });
+  }
+  return imported;
+}
+
+async function extractFileText(file){
+  const name = file.name.toLowerCase();
+  if(name.endsWith(".json") || name.endsWith(".txt")){
+    return await file.text();
+  }
+
+  if(name.endsWith(".pdf")){
+    if(!window.pdfjsLib) throw Error("The PDF reader library did not load. Connect to the internet, reload the page, and try again.");
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
+    let fullText = "";
+    for(let pageNo=1; pageNo<=pdf.numPages; pageNo++){
+      const page = await pdf.getPage(pageNo);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(" ");
+      fullText += "\n" + pageText + "\n";
+    }
+    if(!fullText.trim()) throw Error("No selectable text was found in this PDF. Scanned/image-only PDFs need OCR before importing.");
+    return fullText;
+  }
+
+  if(name.endsWith(".docx")){
+    if(!window.mammoth) throw Error("The Word reader library did not load. Connect to the internet, reload the page, and try again.");
+    const buffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({arrayBuffer:buffer});
+    return result.value || "";
+  }
+
+  throw Error("Unsupported file type. Choose JSON, TXT, PDF, or Word DOCX.");
+}
+
+async function chooseJSONFile(){
+  $("jsonFile").click();
+}
+
+async function importFile(){
+  const input = $("jsonFile");
+  const file = input.files && input.files[0];
+  if(!file){
+    $("importMessage").textContent = "Please tap Choose File and select a file first.";
+    return;
+  }
+
+  $("importMessage").textContent = "Reading " + file.name + "...";
+  $("importFileBtn").disabled = true;
+
+  try{
+    const rawText = await extractFileText(file);
+    let count;
+    if(file.name.toLowerCase().endsWith(".json")){
+      count = addImportedQuestions(rawText, $("importSubject").value);
+    }else{
+      const imported = parseDocumentQuestions(rawText, $("importSubject").value).map(q => ({
+        ...q,
+        topic: autoClassifyTopic(q.question, normalizeSubject(q.subject), $("importTopic").value)
+      }));
+      stageImported(imported, $("importSubject").value, $("importTopic").value);
+      count = imported.length;
+    }
+    if(count === false) return;
+
+    $("importMessage").textContent =
+      "Extracted " + count + " question(s) from " + file.name +
+      ". Review each question's subject, topic, and duplicate warning below, then approve to save.";
+    input.value = "";
+    $("selectedFile").textContent = "No file selected.";
+  }catch(e){
+    $("importMessage").textContent = "Import error: " + (e && e.message ? e.message : "The file could not be processed.");
+  }finally{
+    $("importFileBtn").disabled = false;
+  }
+}
+
+$("jsonFile").addEventListener("change",function(){
+  const file = this.files && this.files[0];
+  $("selectedFile").textContent = file ? "Selected file: " + file.name : "No file selected.";
+  $("importMessage").textContent = "";
+});
+
+function showBank(){
+  const box = $("bankContent");
+  box.replaceChildren();
+  if(!questions.length){
+    box.textContent = "Your question bank is empty.";
+  }else{
+    questions.forEach((q,i) => {
+      const card = document.createElement("div");
+      card.className = "question";
+      const title = document.createElement("h3");
+      title.textContent = (i+1) + ". [" + normalizeSubject(q.subject) + " → " + normalizeTopic(q.topic, q.subject) + "] " + q.question;
+      card.appendChild(title);
+      q.options.forEach((o,j) => {
+        const p = document.createElement("p");
+        p.textContent = String.fromCharCode(65+j) + ". " + o;
+        card.appendChild(p);
+      });
+      const answer = document.createElement("p");
+      answer.className = "small";
+      answer.textContent = q.answer === null
+        ? "Answer key: Not supplied"
+        : "Correct answer: " + String.fromCharCode(65+q.answer) + ". " + q.options[q.answer];
+      card.appendChild(answer);
+
+      const del = document.createElement("button");
+      del.textContent = "Delete Question";
+      del.className = "danger";
+      del.addEventListener("click",() => {
+        if(confirm("Delete this question?")){
+          const removed = questions.splice(i,1)[0];
+          if(!saveQuestions()){
+            questions.splice(i,0,removed);
+            updateCount();
+          }
+          showBank();
+        }
+      });
+      card.appendChild(del);
+      box.appendChild(card);
+    });
+  }
+  showPage("bankPage");
+}
+
+function startQuiz(which){
+  const chosenSubject = $("quizSubject").value;
+  const chosenTopic = $("quizTopic").value;
+  const availableQuestions = questions.filter(q =>
+    (chosenSubject === "All" || normalizeSubject(q.subject) === chosenSubject) &&
+    (chosenTopic === "All" || normalizeTopic(q.topic, q.subject) === chosenTopic)
+  );
+  if(!availableQuestions.length){
+    alert("No questions are available for the selected subject and topic. Choose another topic or add/import more questions.");
+    return;
+  }
+  if(which === "exam" && !confirm("Start your timed examination now?")) return;
+  if(timerId) clearInterval(timerId);
+
+  mode = which;
+  quiz = availableQuestions.map(q => ({
+    question:q.question,
+    options:[...q.options],
+    answer:q.answer,
+    subject:normalizeSubject(q.subject),
+    topic:normalizeTopic(q.topic, q.subject)
+  })).sort(() => Math.random() - 0.5);
+
+  answers = new Array(quiz.length).fill(null);
+  index = 0;
+  locked = false;
+  $("quizHeading").textContent = which === "exam" ? "Examination in Progress" : "Practice Mode";
+  $("submitBtn").classList.toggle("hidden",which !== "exam");
+  $("quizMessage").textContent = "";
+
+  if(which === "exam"){
+    seconds = minutes * 60;
+    updateTimer();
+    timerId = setInterval(() => {
+      seconds--;
+      updateTimer();
+      if(seconds <= 0) finish(true);
+    },1000);
+  }else{
+    $("timer").textContent = "Practice Mode";
+    $("timer").style.color = "#19d3c5";
+  }
+
+  showPage("quizPage");
+  renderQuestion();
+}
+
+function updateTimer(){
+  $("timer").textContent =
+    String(Math.floor(Math.max(0,seconds)/60)).padStart(2,"0") + ":" +
+    String(Math.max(0,seconds)%60).padStart(2,"0");
+  $("timer").style.color = seconds <= 60 ? "#ff6577" : "#19d3c5";
+}
+
+function renderQuestion(){
+  locked = false;
+  const q = quiz[index];
+  $("position").textContent = "Question " + (index+1) + " of " + quiz.length;
+  const box = $("quizContent");
+  box.replaceChildren();
+  const title = document.createElement("h3");
+  title.textContent = q.question;
+  const topicBadge = document.createElement("p");
+  topicBadge.className = "small";
+  topicBadge.textContent = q.subject + " → " + q.topic;
+  box.appendChild(topicBadge);
+  box.appendChild(title);
+
+  q.options.forEach((option,j) => {
+    const label = document.createElement("label");
+    label.className = "option";
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "choice";
+    radio.checked = answers[index] === j;
+    radio.addEventListener("change",() => {
+      if(locked) return;
+      answers[index] = j;
+      if(mode === "practice"){
+        locked = true;
+        showFeedback();
+      }
+    });
+    const span = document.createElement("span");
+    span.textContent = String.fromCharCode(65+j) + ". " + option;
+    label.append(radio,span);
+    box.appendChild(label);
+  });
+
+  $("nextBtn").textContent = index === quiz.length-1 ? "Finish / Submit" : "Next Question →";
+  if(mode === "practice" && answers[index] !== null){
+    locked = true;
+    showFeedback();
+  }
+}
+
+function showFeedback(){
+  const q = quiz[index];
+  [...$("quizContent").querySelectorAll(".option")].forEach((label,j) => {
+    label.querySelector("input").disabled = true;
+    if(q.answer !== null && j === q.answer) label.style.border = "2px solid #19d3c5";
+    if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
+  });
+
+  if(q.answer === null){
+    $("quizMessage").textContent = "Your answer is saved. No answer key was supplied for this question, so it cannot be graded.";
+  }else{
+    $("quizMessage").textContent = answers[index] === q.answer
+      ? "Correct! Well done."
+      : "Incorrect. Correct answer: " + String.fromCharCode(65+q.answer) + ".";
+  }
+}
+
+function nextQuestion(){
+  if(mode === "practice" && answers[index] === null){
+    $("quizMessage").textContent = "Choose an answer first.";
+    return;
+  }
+  if(index < quiz.length-1){
+    index++;
+    $("quizMessage").textContent = "";
+    renderQuestion();
+  }else if(mode === "exam"){
+    if(confirm("Submit your examination now?")) finish(false);
+  }else{
+    finish(false);
+  }
+}
+
+function finish(expired){
+  if(timerId) clearInterval(timerId);
+  timerId = null;
+
+  let score = 0;
+  let gradable = 0;
+  quiz.forEach((q,i) => {
+    if(q.answer !== null){
+      gradable++;
+      if(answers[i] === q.answer) score++;
+    }
+  });
+
+  $("resultStudent").textContent = "Student: " + student.name + " · School: " + student.school;
+  $("score").textContent = gradable
+    ? score + " / " + gradable + " graded question(s)"
+    : "No answer key available";
+  $("percentage").textContent = gradable
+    ? "Score: " + Math.round(score/gradable*100) + "% · " + (quiz.length-gradable) + " ungraded question(s)" + (expired ? " · Time expired" : "")
+    : "No percentage can be calculated because none of the questions has a correct answer supplied." + (expired ? " · Time expired" : "");
+
+  const review = $("review");
+  review.replaceChildren();
+  quiz.forEach((q,i) => {
+    const card = document.createElement("div");
+    card.className = "question";
+    const title = document.createElement("h3");
+    title.textContent = (i+1) + ". [" + normalizeSubject(q.subject) + " → " + normalizeTopic(q.topic, q.subject) + "] " + q.question;
+    const your = document.createElement("p");
+    your.textContent = "Your answer: " + (answers[i] === null
+      ? "Not answered"
+      : String.fromCharCode(65+answers[i]) + ". " + q.options[answers[i]]);
+    const correct = document.createElement("p");
+    correct.textContent = q.answer === null
+      ? "Correct answer: Answer key not supplied; this question was not graded."
+      : "Correct answer: " + String.fromCharCode(65+q.answer) + ". " + q.options[q.answer];
+    card.append(title,your,correct);
+    review.appendChild(card);
+  });
+
+  mode = "";
+  showPage("resultPage");
+}
+
+/* Connect buttons. */
+function refreshTopicSuggestions(){
+  const list = $("topicSuggestions");
+  if(!list) return;
+  list.replaceChildren();
+  const subject = $("addSubject") ? normalizeSubject($("addSubject").value) : "General";
+  topicOptionsFor(subject).forEach(topic => {
+    const option = document.createElement("option");
+    option.value = topic;
+    list.appendChild(option);
+  });
+}
+
+function refreshQuizTopics(){
+  const subject = $("quizSubject").value;
+  const select = $("quizTopic");
+  const old = select.value;
+  select.replaceChildren();
+  const all = document.createElement("option");
+  all.value = "All"; all.textContent = "All topics";
+  select.appendChild(all);
+  const topics = new Set();
+  questions.forEach(q => {
+    if(subject === "All" || normalizeSubject(q.subject) === subject) topics.add(normalizeTopic(q.topic,q.subject));
+  });
+  [...topics].sort((a,b)=>a.localeCompare(b)).forEach(topic => {
+    const opt = document.createElement("option");
+    opt.value = topic; opt.textContent = topic;
+    select.appendChild(opt);
+  });
+  if([...select.options].some(o => o.value === old)) select.value = old;
+}
+
+$("quizSubject").addEventListener("change",refreshQuizTopics);
+$("addSubject").addEventListener("change",refreshTopicSuggestions);
+$("importSubject").addEventListener("change",() => {
+  if(!$("importTopic").value.trim()) $("importTopic").value = "";
+});
+$("saveReviewedBtn").addEventListener("click",() => { startAfterImport = false; saveReviewedImports(); });
+$("saveAndStartBtn").addEventListener("click",() => { startAfterImport = true; saveReviewedImports(); });
+$("cancelReviewBtn").addEventListener("click",() => {
+  startAfterImport = false;
+  clearImportReview();
+  $("importMessage").textContent = "Import review cancelled. No questions were saved.";
+});
+
+$("continueBtn").addEventListener("click",login);
+$("saveDurationBtn").addEventListener("click",saveDuration);
+$("saveQuestionBtn").addEventListener("click",addQuestion);
+$("importTextBtn").addEventListener("click",importText);
+$("chooseFileBtn").addEventListener("click",chooseJSONFile);
+$("importFileBtn").addEventListener("click",importFile);
+$("examBtn").addEventListener("click",() => startQuiz("exam"));
+$("practiceBtn").addEventListener("click",() => startQuiz("practice"));
+$("addBtn").addEventListener("click",() => {
+  $("duration").value = minutes;
+  showPage("addPage");
+});
+$("importBtn").addEventListener("click",() => showPage("importPage"));
+$("bankBtn").addEventListener("click",showBank);
+$("nextBtn").addEventListener("click",nextQuestion);
+$("submitBtn").addEventListener("click",() => finish(false));
+$("menuResultBtn").addEventListener("click",() => showPage("menuPage"));
+document.querySelectorAll(".backBtn").forEach(button => {
+  button.addEventListener("click",() => showPage("menuPage"));
+});
+
+$("duration").value = minutes;
+updateCount();
+refreshTopicSuggestions();
+refreshQuizTopics();
+})();
+</script>
+</body>
+</html>
