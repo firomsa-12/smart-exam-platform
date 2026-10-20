@@ -139,6 +139,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <hr>
 <label>Choose a file</label>
 <input type="file" id="jsonFile" accept=".json,.txt,.pdf,.docx">
+<!-- RESTORED THE MISSING ELEMENT HERE -->
+<p id="selectedFile" class="small">No file selected.</p>
 <button id="chooseFileBtn" class="secondary" type="button">Choose File</button>
 <button id="importFileBtn" class="secondary" type="button">Import Selected File</button>
 <p id="importMessage" class="small"></p>
@@ -497,7 +499,7 @@ $("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) retur
 $("menuResultBtn").onclick = () => showPage("menuPage");
 document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
 
-// ========== IMPORT LOGIC (RESTORED & CONNECTED TO CLOUD) ==========
+// ========== IMPORT LOGIC ==========
 function saveImportedQuestions(importedData) {
     if(!importedData.length) { $("importMessage").textContent = "No valid questions found."; return; }
     $("importMessage").textContent = "Uploading questions to cloud...";
