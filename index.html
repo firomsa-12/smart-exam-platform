@@ -33,6 +33,7 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere}
 a{color:#19d3c5;overflow-wrap:anywhere}a:hover{color:#ffffff}
 .subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
 .set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
+.loading-msg { color: #3988ff; font-weight: bold; text-align: center; margin: 10px 0; }
 </style>
 </head>
 <body>
@@ -70,7 +71,6 @@ window.addEventListener("error",function(event){var box=document.getElementById(
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
 
-<!-- NEW: Set / Document Selector -->
 <label for="quizSet">Exam Set (Document)</label>
 <select id="quizSet"><option value="All">All Sets</option></select>
 
@@ -137,7 +137,6 @@ window.addEventListener("error",function(event){var box=document.getElementById(
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
 
-<!-- NEW: Document Set Name -->
 <label for="importSetName">Document / Set Name</label>
 <input id="importSetName" placeholder="e.g., Kinematics Test 1 (Auto-fills from file name)">
 <p class="small">Questions will be saved into this specific set. Duplicates are skipped.</p>
@@ -174,6 +173,7 @@ window.addEventListener("error",function(event){var box=document.getElementById(
 <p id="position" class="small"></p>
 <div id="quizContent"></div>
 <p id="quizMessage" class="small"></p>
+<div id="aiLoading" class="loading-msg hidden">🤖 AI is grading, please wait...</div>
 <button id="nextBtn">Next Question →</button>
 <button id="submitBtn" class="danger hidden">Submit Examination</button>
 </section>
@@ -207,16 +207,16 @@ let timerId = null;
 let locked = false;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
 
-const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; // Upgraded key to prevent bugs
+const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 const API_KEY = "smartExamGeminiKey";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
 function normalizeSet(value){ return String(value || "").trim() || "Default Set"; }
 function normalizeQuestionText(value){ return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," "); }
 
-// Load saved questions and key
 try{
   const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
   if(Array.isArray(saved)) {
@@ -284,6 +284,25 @@ function addQuestion(){
   }
 }
 
+/* --- AI HELPER FUNCTION --- */
+async function getAIAnswerForSingle(q, key) {
+  const prompt = `You are an exam grader. For the following multiple-choice question, determine the correct answer. Return ONLY a single uppercase letter: A, B, C, or D. Do not include any other text.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
+  
+  const res = await fetch(GEMINI_URL + key, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  
+  const data = await res.json();
+  if(data.error) throw new Error(data.error.message);
+  
+  const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+  const match = aiText.match(/[A-D]/);
+  if(match) return match[0].charCodeAt(0) - 65; // returns 0-3
+  return null;
+}
+
 async function getAIAnswer() {
   const key = $("apiKey").value.trim();
   if(!key) { alert("Please enter your Gemini API key first."); return; }
@@ -296,27 +315,14 @@ async function getAIAnswer() {
   $("addMessage").textContent = "🤖 AI is thinking... Please wait.";
   $("aiAnswerBtn").disabled = true;
 
-  const prompt = `You are an exam grader. For the following multiple-choice question, determine the correct answer. Return ONLY a single uppercase letter: A, B, C, or D. Do not include any other text.\nQuestion: ${q}\nA) ${opts[0]}\nB) ${opts[1]}\nC) ${opts[2]}\nD) ${opts[3]}`;
-
   try {
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${key}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-    });
-    
-    const data = await res.json();
-    if(data.error) throw new Error(data.error.message);
-    
-    const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
-    const match = aiText.match(/[A-D]/);
-    
-    if(match) {
-      const letter = match[0];
-      $("correct").value = letter.charCodeAt(0) - 65;
+    const ansIndex = await getAIAnswerForSingle({question: q, options: opts}, key);
+    if(ansIndex !== null) {
+      const letter = String.fromCharCode(65 + ansIndex);
+      $("correct").value = ansIndex;
       $("addMessage").textContent = `✅ AI found the answer: Option ${letter}`;
     } else {
-      $("addMessage").textContent = `❌ AI responded: "${aiText}". Could not extract A, B, C, or D.`;
+      $("addMessage").textContent = `❌ AI could not determine a clear answer.`;
     }
   } catch (err) {
     $("addMessage").textContent = "❌ AI Error: " + err.message;
@@ -346,10 +352,8 @@ function processImported(data, defaultSubject, defaultTopic, defaultSetName){
 
   data.forEach(q => {
     if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) return;
-    
     const qNorm = normalizeQuestionText(q.question);
     const isDup = questions.some(existing => normalizeQuestionText(existing.question) === qNorm);
-    
     if(isDup) { skippedCount++; return; }
 
     questions.push({
@@ -453,11 +457,8 @@ async function importFile(){
   $("importMessage").textContent = "Reading file...";
   
   try {
-    // Auto-fill Set Name with file name if empty
     let setName = $("importSetName").value.trim();
-    if(!setName) {
-      setName = file.name.replace(/\.[^/.]+$/, ""); // remove extension
-    }
+    if(!setName) setName = file.name.replace(/\.[^/.]+$/, "");
 
     const rawText = await extractFileText(file);
     let data = [];
@@ -476,4 +477,271 @@ async function importFile(){
   }
 }
 
-/* ORGANIZED QUES
+function showBank(){
+  const box = $("bankContent");
+  box.replaceChildren();
+  if(!questions.length){ box.textContent = "Your bank is empty."; return; }
+  
+  const grouped = {};
+  SUBJECTS.forEach(s => grouped[s] = {});
+  questions.forEach((q,i) => {
+    const sub = normalizeSubject(q.subject);
+    const set = normalizeSet(q.setName);
+    if(!grouped[sub][set]) grouped[sub][set] = [];
+    grouped[sub][set].push({...q, originalIndex: i});
+  });
+
+  SUBJECTS.forEach(sub => {
+    const sets = Object.keys(grouped[sub]);
+    if(sets.length === 0) return;
+    
+    const sHeader = document.createElement("div");
+    sHeader.className = "subject-header";
+    sHeader.textContent = sub;
+    box.appendChild(sHeader);
+
+    sets.forEach(setName => {
+      const setH = document.createElement("div");
+      setH.className = "set-header";
+      setH.textContent = `📁 ${setName} (${grouped[sub][setName].length})`;
+      box.appendChild(setH);
+
+      grouped[sub][setName].forEach((q) => {
+        const card = document.createElement("div");
+        card.className = "question";
+        card.innerHTML = `<h3>${q.question}</h3>`;
+        q.options.forEach((o,j) => card.innerHTML += `<p>${String.fromCharCode(65+j)}. ${o}</p>`);
+        card.innerHTML += `<p class="small">Answer: ${q.answer===null?'AI will grade':String.fromCharCode(65+q.answer)}</p>`;
+        
+        const del = document.createElement("button");
+        del.textContent = "Delete"; del.className = "danger";
+        del.onclick = () => { if(confirm("Delete?")) { questions.splice(q.originalIndex,1); saveQuestions(); showBank(); } };
+        card.appendChild(del);
+        box.appendChild(card);
+      });
+    });
+  });
+  showPage("bankPage");
+}
+
+function startQuiz(which){
+  const chosenSubject = $("quizSubject").value;
+  const chosenSet = $("quizSet").value;
+  const chosenTopic = $("quizTopic").value;
+  const limit = parseInt($("examLimit").value);
+
+  let availableQuestions = questions.filter(q =>
+    (chosenSubject === "All" || normalizeSubject(q.subject) === chosenSubject) &&
+    (chosenSet === "All" || normalizeSet(q.setName) === chosenSet) &&
+    (chosenTopic === "All" || normalizeTopic(q.topic) === chosenTopic)
+  );
+
+  if(!availableQuestions.length){ alert("No questions match this combination."); return; }
+  
+  availableQuestions = availableQuestions.sort(() => Math.random() - 0.5);
+  if(limit > 0 && limit < availableQuestions.length) {
+    availableQuestions = availableQuestions.slice(0, limit);
+  }
+
+  if(which === "exam" && !confirm(`Start timed exam with ${availableQuestions.length} questions?`)) return;
+  if(timerId) clearInterval(timerId);
+
+  mode = which;
+  quiz = availableQuestions.map(q => ({
+    question:q.question, options:[...q.options], answer:q.answer,
+    subject:normalizeSubject(q.subject), topic:normalizeTopic(q.topic)
+  }));
+
+  answers = new Array(quiz.length).fill(null);
+  index = 0; locked = false;
+  $("quizHeading").textContent = which === "exam" ? "Examination" : "Practice";
+  $("submitBtn").classList.toggle("hidden",which !== "exam");
+  $("quizMessage").textContent = "";
+  $("aiLoading").classList.add("hidden");
+
+  if(which === "exam"){
+    seconds = minutes * 60;
+    updateTimer();
+    timerId = setInterval(() => { seconds--; updateTimer(); if(seconds <= 0) finish(true); },1000);
+  } else {
+    $("timer").textContent = "Practice Mode";
+  }
+
+  showPage("quizPage");
+  renderQuestion();
+}
+
+function updateTimer(){
+  $("timer").textContent = String(Math.floor(Math.max(0,seconds)/60)).padStart(2,"0") + ":" + String(Math.max(0,seconds)%60).padStart(2,"0");
+}
+
+function renderQuestion(){
+  locked = false;
+  const q = quiz[index];
+  $("position").textContent = `Question ${index+1} of ${quiz.length}`;
+  const box = $("quizContent"); box.replaceChildren();
+  box.innerHTML = `<p class="small">${q.subject} → ${q.topic}</p><h3>${q.question}</h3>`;
+
+  q.options.forEach((option,j) => {
+    const label = document.createElement("label");
+    label.className = "option";
+    const radio = document.createElement("input");
+    radio.type = "radio"; radio.name = "choice"; radio.checked = answers[index] === j;
+    
+    // ASYNC Practice Mode Event
+    radio.onchange = async () => { 
+      if(locked) return; 
+      answers[index] = j; 
+      if(mode === "practice"){ 
+        locked = true; 
+        if(q.answer === null) {
+           $("quizMessage").textContent = "";
+           $("aiLoading").classList.remove("hidden");
+           const key = localStorage.getItem(API_KEY);
+           if(key) {
+             try { q.answer = await getAIAnswerForSingle(q, key); } catch(e) { console.warn(e); }
+           }
+           $("aiLoading").classList.add("hidden");
+        }
+        showFeedback(); 
+      } 
+    };
+    label.append(radio, document.createTextNode(`${String.fromCharCode(65+j)}. ${option}`));
+    box.appendChild(label);
+  });
+
+  $("nextBtn").textContent = index === quiz.length-1 ? "Finish" : "Next →";
+  if(mode === "practice" && answers[index] !== null){ locked = true; showFeedback(); }
+}
+
+function showFeedback(){
+  const q = quiz[index];
+  [...$("quizContent").querySelectorAll(".option")].forEach((label,j) => {
+    label.querySelector("input").disabled = true;
+    if(q.answer !== null && j === q.answer) label.style.border = "2px solid #19d3c5";
+    if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
+  });
+  if(q.answer === null) $("quizMessage").textContent = "Saved. (No answer key, AI could not grade).";
+  else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : `Incorrect. Answer: ${String.fromCharCode(65+q.answer)}`;
+}
+
+function nextQuestion(){
+  if(mode === "practice" && answers[index] === null){ $("quizMessage").textContent = "Choose an answer."; return; }
+  if(index < quiz.length-1){ index++; renderQuestion(); }
+  else if(mode === "exam"){ if(confirm("Submit?")) finish(false); }
+  else finish(false);
+}
+
+/* ASYNC finish FOR AI BATCH GRADING */
+async function finish(expired){
+  if(timerId) clearInterval(timerId);
+  
+  // AI BATCH GRADING FALLBACK
+  const key = localStorage.getItem(API_KEY);
+  const ungradedIndices = quiz.map((q, i) => q.answer === null ? i : -1).filter(i => i !== -1);
+  
+  if(ungradedIndices.length > 0 && key) {
+      $("quizMessage").textContent = "";
+      $("aiLoading").classList.remove("hidden");
+      $("aiLoading").textContent = `🤖 AI is grading ${ungradedIndices.length} questions...`;
+      $("submitBtn").disabled = true;
+      $("nextBtn").disabled = true;
+
+      // Grade questions one by one to ensure accuracy
+      for(let i of ungradedIndices) {
+          try {
+              const aiAns = await getAIAnswerForSingle(quiz[i], key);
+              if(aiAns !== null) quiz[i].answer = aiAns;
+          } catch(e) {
+              console.warn("Failed AI grading for index", i, e);
+          }
+      }
+      $("submitBtn").disabled = false;
+      $("nextBtn").disabled = false;
+  }
+
+  let score = 0, gradable = 0;
+  quiz.forEach((q,i) => { if(q.answer !== null){ gradable++; if(answers[i] === q.answer) score++; } });
+
+  $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
+  $("score").textContent = gradable ? `${score} / ${gradable}` : "No answer key available";
+  $("percentage").textContent = gradable ? `${Math.round(score/gradable*100)}% ${expired ? '(Time Expired)' : ''}` : "Ungraded questions";
+
+  const review = $("review"); review.replaceChildren();
+  quiz.forEach((q,i) => {
+    const card = document.createElement("div"); card.className = "question";
+    card.innerHTML = `<h3>${i+1}. ${q.question}</h3>
+      <p>Your answer: ${answers[i]===null?'None':String.fromCharCode(65+answers[i])}</p>
+      <p class="small">Correct: ${q.answer===null?'None':String.fromCharCode(65+q.answer)}</p>`;
+    review.appendChild(card);
+  });
+  mode = ""; 
+  $("aiLoading").classList.add("hidden");
+  showPage("resultPage");
+}
+
+function refreshDropdowns(){
+  const sub = $("quizSubject").value;
+  const setSelect = $("quizSet");
+  const currentSet = setSelect.value;
+  setSelect.replaceChildren();
+  const allSets = document.createElement("option"); allSets.value = "All"; allSets.textContent = "All Sets"; setSelect.appendChild(allSets);
+  
+  const sets = new Set();
+  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
+  [...sets].sort().forEach(s => {
+    const opt = document.createElement("option"); opt.value = s; opt.textContent = s; setSelect.appendChild(opt);
+  });
+  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
+
+  const topicSelect = $("quizTopic");
+  const currentTopic = topicSelect.value;
+  topicSelect.replaceChildren();
+  const allTopics = document.createElement("option"); allTopics.value = "All"; allTopics.textContent = "All topics"; topicSelect.appendChild(allTopics);
+  
+  const topics = new Set();
+  questions.forEach(q => { 
+    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
+  });
+  [...topics].sort().forEach(t => {
+    const opt = document.createElement("option"); opt.value = t; opt.textContent = t; topicSelect.appendChild(opt);
+  });
+  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
+}
+
+function refreshTopicSuggestions(){
+  const list = $("topicSuggestions"); list.replaceChildren();
+  const sub = $("addSubject").value;
+  const topics = new Set(["General"]);
+  questions.filter(q => q.subject === sub).forEach(q => topics.add(q.topic));
+  [...topics].sort().forEach(t => {
+    const opt = document.createElement("option"); opt.value = t; list.appendChild(opt);
+  });
+}
+
+$("quizSubject").onchange = refreshDropdowns;
+$("quizSet").onchange = refreshDropdowns;
+$("addSubject").onchange = refreshTopicSuggestions;
+$("continueBtn").onclick = login;
+$("saveDurationBtn").onclick = saveDuration;
+$("saveQuestionBtn").onclick = addQuestion;
+$("aiAnswerBtn").onclick = getAIAnswer;
+$("importTextBtn").onclick = importText;
+$("chooseFileBtn").onclick = () => $("jsonFile").click();
+$("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
+$("importFileBtn").onclick = importFile;
+$("examBtn").onclick = () => startQuiz("exam");
+$("practiceBtn").onclick = () => startQuiz("practice");
+$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
+$("importBtn").onclick = () => showPage("importPage");
+$("bankBtn").onclick = showBank;
+$("nextBtn").onclick = nextQuestion;
+$("submitBtn").onclick = () => finish(false);
+$("menuResultBtn").onclick = () => showPage("menuPage");
+document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
+
+updateCount(); refreshTopicSuggestions(); refreshDropdowns();
+})();
+</script>
+</body>
+</html>
