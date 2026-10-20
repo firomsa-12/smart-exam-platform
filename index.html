@@ -30,40 +30,19 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
-.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
-.loading-msg { color: #3988ff; font-weight: bold; text-align: center; margin: 10px 0; }
 </style>
 </head>
 <body>
 <div class="container">
-
-<div id="appError" class="card" style="display:none;border:2px solid #ff6577">
-  <h2 style="color:#ff6577">App Error</h2>
-  <pre id="appErrorText"></pre>
-</div>
-
-<script>
-window.addEventListener("error", function(event) {
-  var box = document.getElementById("appError");
-  var text = document.getElementById("appErrorText");
-  if (box && text) {
-    box.style.display = "block";
-    text.textContent = event.message || "Unknown error";
-  }
-});
-</script>
-
 <header>
 <h1>🎓 SMART EXAM PLATFORM</h1>
-<p class="small">Learn · Practice · Test Your Knowledge</p>
 </header>
 
 <section id="loginPage" class="card">
 <h2>Student Login</h2>
-<label for="studentName">Student Name</label>
+<label>Student Name</label>
 <input id="studentName" placeholder="Enter your full name">
-<label for="schoolName">School Name</label>
+<label>School Name</label>
 <input id="schoolName" placeholder="Enter your school name">
 <button id="continueBtn" type="button">Continue →</button>
 <p id="loginMessage" class="small"></p>
@@ -74,18 +53,8 @@ window.addEventListener("error", function(event) {
 <p id="welcome"></p>
 <div class="info">Total Questions available: <strong id="count">0</strong></div>
 
-<label for="quizSubject">Subject</label>
-<select id="quizSubject">
-<option value="All">All subjects</option>
-<option>Physics</option><option>Chemistry</option><option>Biology</option>
-<option>Mathematics</option><option>English</option><option>General</option>
-</select>
-
 <label for="quizSet">Exam Set (Document)</label>
 <select id="quizSet"><option value="All">All Sets</option></select>
-
-<label for="quizTopic">Topic</label>
-<select id="quizTopic"><option value="All">All topics</option></select>
 
 <label for="examLimit">Number of questions for this session (Leave empty for all)</label>
 <input id="examLimit" type="number" min="1" placeholder="e.g. 20">
@@ -95,42 +64,33 @@ window.addEventListener("error", function(event) {
 <button id="practiceBtn" class="secondary">📚 Start Practice</button>
 <button id="addBtn" class="secondary">➕ Add Questions</button>
 <button id="importBtn" class="secondary">📥 Import Questions</button>
-<button id="bankBtn" class="secondary">🗂 Question Bank</button>
+<button id="keyBtn" class="secondary" style="grid-column: span 2; background: #ff9800; color: white;">🔑 Apply Answer Key</button>
+<button id="bankBtn" class="secondary" style="grid-column: span 2;">🗂 Question Bank</button>
 </div>
 </section>
 
 <section id="addPage" class="card hidden">
 <h2>Add Questions Manually</h2>
-<label for="addSubject">Subject</label>
+<label>Subject</label>
 <select id="addSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
-<label for="addSet">Set Name (e.g., Chapter 1)</label>
+<label>Set Name</label>
 <input id="addSet" placeholder="e.g., Kinematics Manual">
-<label for="addTopic">Topic</label>
-<input id="addTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
-<datalist id="topicSuggestions"></datalist>
-<label for="duration">Examination duration (minutes)</label>
+<label>Duration (minutes)</label>
 <input id="duration" type="number" min="1" max="600" value="30">
 <button id="saveDurationBtn" class="secondary">Save Time Limit</button>
 <p id="durationMessage" class="small"></p>
 <hr>
-<label for="qText">Question</label>
+<label>Question</label>
 <textarea id="qText" placeholder="Enter your question"></textarea>
-<label for="a">Option A</label><input id="a" placeholder="Option A">
-<label for="b">Option B</label><input id="b" placeholder="Option B">
-<label for="c">Option C</label><input id="c" placeholder="Option C">
-<label for="d">Option D</label><input id="d" placeholder="Option D">
+<label>Option A</label><input id="a" placeholder="Option A">
+<label>Option B</label><input id="b" placeholder="Option B">
+<label>Option C</label><input id="c" placeholder="Option C">
+<label>Option D</label><input id="d" placeholder="Option D">
 
-<div class="info">
-  <strong>🤖 AI Auto-Answer (Google Gemini)</strong>
-  <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
-  <input id="apiKey" type="password" placeholder="Paste Google API Key here (starts with AIza...)">
-  <button id="aiAnswerBtn" class="secondary" type="button">Ask AI for Correct Answer</button>
-</div>
-
-<label for="correct">Correct answer</label>
+<label>Correct answer</label>
 <select id="correct">
 <option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
 </select>
@@ -141,29 +101,35 @@ window.addEventListener("error", function(event) {
 
 <section id="importPage" class="card hidden">
 <h2>Import Questions</h2>
-<label for="importSubject">Default subject for imported questions</label>
+<label>Default subject</label>
 <select id="importSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option>
 <option>Mathematics</option><option>English</option><option>General</option>
 </select>
-
-<label for="importSetName">Document / Set Name</label>
-<input id="importSetName" placeholder="e.g., Kinematics Test 1 (Auto-fills from file name)">
-<p class="small">Questions will be saved into this specific set. Duplicates are skipped.</p>
-
-<label for="importTopic">Default topic</label>
-<input id="importTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
-
-<label for="jsonText">Paste JSON questions</label>
-<textarea id="jsonText" placeholder="Paste your complete JSON questions here"></textarea>
+<label>Document / Set Name</label>
+<input id="importSetName" placeholder="e.g., Kinematics Test 1">
+<p class="small">This imports the questions. If they don't have answers, go to "Apply Answer Key" on the menu.</p>
+<label>Paste JSON questions</label>
+<textarea id="jsonText" placeholder="Paste JSON here"></textarea>
 <button id="importTextBtn">Import Pasted JSON</button>
 <hr>
-<label for="jsonFile">Choose a JSON, TXT, PDF, or Word file</label>
+<label>Choose a file</label>
 <input type="file" id="jsonFile" accept=".json,.txt,.pdf,.docx">
-<p id="selectedFile" class="small">No file selected.</p>
 <button id="chooseFileBtn" class="secondary" type="button">Choose File</button>
 <button id="importFileBtn" class="secondary" type="button">Import Selected File</button>
-<p id="importMessage" class="small" role="status" aria-live="polite"></p>
+<p id="importMessage" class="small"></p>
+<button class="backBtn secondary">← Back to Menu</button>
+</section>
+
+<section id="keyPage" class="card hidden">
+<h2>🔑 Apply Answer Key</h2>
+<p class="small">Enter your answer key below (e.g., "1. A, 2. C, 3. B"). The app will find the matching questions in the set and apply the answers.</p>
+<label>Set Name to apply answers to</label>
+<input id="keySetName" placeholder="e.g., Kinematics Test 1">
+<label>Paste Answer Key here</label>
+<textarea id="keyText" placeholder="1. A&#10;2. C&#10;3. B&#10;4. D"></textarea>
+<button id="applyKeyBtn">Apply Answers</button>
+<p id="keyMessage" class="small" style="color:#19d3c5;"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
@@ -179,7 +145,6 @@ window.addEventListener("error", function(event) {
 <p id="position" class="small"></p>
 <div id="quizContent"></div>
 <p id="quizMessage" class="small"></p>
-<div id="aiLoading" class="loading-msg hidden">🤖 AI is grading, please wait...</div>
 <button id="nextBtn">Next Question →</button>
 <button id="submitBtn" class="danger hidden">Submit Examination</button>
 <button id="quitBtn" class="secondary" style="margin-top:10px;">🚪 Quit / Back to Menu</button>
@@ -198,164 +163,15 @@ window.addEventListener("error", function(event) {
 <script>
 (function(){
 "use strict";
-
 const $ = id => document.getElementById(id);
-const pages = ["loginPage","menuPage","addPage","importPage","bankPage","quizPage","resultPage"];
-
-let questions = [];
-let student = {name:"",school:""};
-let minutes = 30;
-let quiz = [];
-let answers = [];
-let index = 0;
-let mode = "";
-let seconds = 0;
-let timerId = null;
-let locked = false;
+const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage","quizPage","resultPage"];
+let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
-
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
-const API_KEY = "smartExamGeminiKey";
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
-function normalizeTopic(value){ return String(value || "").trim() || "General"; }
 function normalizeSet(value){ return String(value || "").trim() || "Default Set"; }
-function normalizeQuestionText(value){ return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g," ").trim().replace(/\s+/g," "); }
-
-try{
-  const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
-  if(Array.isArray(saved)) {
-    questions = saved.filter(q => q && q.question && Array.isArray(q.options) && q.options.length===4).map(q => ({
-      ...q, subject: normalizeSubject(q.subject), topic: normalizeTopic(q.topic), setName: normalizeSet(q.setName)
-    }));
-  }
-  const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
-  if(savedMinutes >= 1 && savedMinutes <= 600) minutes = savedMinutes;
-  const savedKey = localStorage.getItem(API_KEY);
-  if(savedKey) $("apiKey").value = savedKey;
-}catch(e){ console.warn("Storage error", e); }
-
-function saveQuestions(){
-  try{
-    localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
-    updateCount();
-    return true;
-  }catch(e){ alert("Storage full."); return false; }
-}
-function updateCount(){ $("count").textContent = questions.length; }
-
-function showPage(id){
-  if(mode === "exam" && id !== "quizPage" && id !== "resultPage" && id !== "menuPage"){
-    $("quizMessage").textContent = "Finish the examination before leaving.";
-    return;
-  }
-  pages.forEach(p => $(p).classList.add("hidden"));
-  $(id).classList.remove("hidden");
-  updateCount();
-}
-
-function login(){
-  const name = $("studentName").value.trim();
-  const school = $("schoolName").value.trim();
-  if(!name || !school){ $("loginMessage").textContent = "Enter name and school."; return; }
-  student = {name,school};
-  $("welcome").textContent = "Welcome, " + name;
-  showPage("menuPage");
-}
-
-function saveDuration(){
-  const value = Number($("duration").value);
-  if(value >= 1 && value <= 600){
-    localStorage.setItem(MINUTES_KEY,String(value));
-    minutes = value;
-    $("durationMessage").textContent = "Time limit saved.";
-  }
-}
-
-async function getAIAnswerForSingle(q, key) {
-  const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
-Question: ${q.question}
-A) ${q.options[0]}
-B) ${q.options[1]}
-C) ${q.options[2]}
-D) ${q.options[3]}
-
-Reply with ONLY the correct option letter: A, B, C, or D.`;
-  
-  const res = await fetch(GEMINI_URL + key, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-  });
-  
-  const data = await res.json();
-  if(data.error) throw new Error(data.error.message);
-  
-  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts[0].text) {
-      throw new Error("Google blocked the response or returned empty data.");
-  }
-
-  const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
-  const match = aiText.match(/[A-D]/);
-  
-  if(match) {
-    return match[0].charCodeAt(0) - 65; 
-  }
-  throw new Error("AI replied, but didn't give a clear A, B, C, or D.");
-}
-
-async function getAIAnswer() {
-  const key = $("apiKey").value.trim();
-  if(!key) { alert("Please enter your Google API key first."); return; }
-  if(!key.startsWith("AIza")) { alert("This doesn't look like a Google API key. It usually starts with 'AIza'."); }
-  
-  localStorage.setItem(API_KEY, key);
-
-  const q = $("qText").value.trim();
-  const opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
-  if(!q || opts.some(x => !x)) { alert("Fill out the question and all 4 options first."); return; }
-
-  $("addMessage").textContent = "🤖 AI is thinking... Please wait.";
-  $("aiAnswerBtn").disabled = true;
-
-  try {
-    const ansIndex = await getAIAnswerForSingle({question: q, options: opts}, key);
-    if(ansIndex !== null) {
-      const letter = String.fromCharCode(65 + ansIndex);
-      $("correct").value = ansIndex;
-      $("addMessage").textContent = "✅ AI found the answer: Option " + letter;
-    }
-  } catch (err) {
-    $("addMessage").textContent = "❌ AI Error: " + err.message;
-  } finally {
-    $("aiAnswerBtn").disabled = false;
-  }
-}
-
-function addQuestion(){
-  const q = $("qText").value.trim();
-  const opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
-  if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
-  
-  questions.push({
-    question:q, options:opts, answer:Number($("correct").value),
-    subject:normalizeSubject($("addSubject").value), 
-    setName:normalizeSet($("addSet").value),
-    topic:normalizeTopic($("addTopic").value)
-  });
-  if(saveQuestions()){
-    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = "");
-    $("addMessage").textContent = "Question saved to " + normalizeSet($("addSet").value);
-  }
-}
-
-function parseQuestionJSON(text){
-  if(!text) throw Error("Empty JSON.");
-  try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON format."); }
-}
-
 function normalizeAnswer(value){
   if(value === null || value === undefined) return null;
   if(typeof value === "number" && value >= 0 && value <= 3) return value;
@@ -365,424 +181,195 @@ function normalizeAnswer(value){
   return null;
 }
 
-function processImported(data, defaultSubject, defaultTopic, defaultSetName){
-  if(!Array.isArray(data) || data.length === 0) throw Error("Needs a non-empty array.");
-  let addedCount = 0;
-  let skippedCount = 0;
+try{
+  const saved = JSON.parse(localStorage.getItem(QUESTIONS_KEY) || "[]");
+  if(Array.isArray(saved)) questions = saved.filter(q => q && q.question).map(q => ({...q, subject: normalizeSubject(q.subject), setName: normalizeSet(q.setName)}));
+  const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
+  if(savedMinutes >= 1) minutes = savedMinutes;
+}catch(e){}
 
-  data.forEach(q => {
-    if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) return;
-    const qNorm = normalizeQuestionText(q.question);
-    const isDup = questions.some(existing => normalizeQuestionText(existing.question) === qNorm);
-    if(isDup) { skippedCount++; return; }
+function saveQuestions(){
+  localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
+  updateCount();
+}
+function updateCount(){ $("count").textContent = questions.length; }
 
-    questions.push({
-      question: q.question.trim(),
-      options: q.options.map(o => String(o).trim()),
-      answer: normalizeAnswer(q.answer),
-      subject: normalizeSubject(q.subject || defaultSubject),
-      setName: normalizeSet(q.setName || defaultSetName),
-      topic: normalizeTopic(q.topic || defaultTopic)
-    });
-    addedCount++;
-  });
-
-  saveQuestions();
-  refreshDropdowns();
-  return { addedCount, skippedCount };
+function showPage(id){
+  if(mode === "exam" && id !== "quizPage" && id !== "resultPage"){
+    if(!confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
+    if(timerId) clearInterval(timerId);
+    mode = "";
+  }
+  pages.forEach(p => $(p).classList.add("hidden"));
+  $(id).classList.remove("hidden");
+  updateCount();
 }
 
-function importText(){
-  try{
-    const setName = $("importSetName").value.trim() || "Pasted JSON Set";
-    const data = parseQuestionJSON($("jsonText").value);
-    const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
-    $("importMessage").textContent = "Saved " + res.addedCount + " questions to \"" + setName + "\". Skipped " + res.skippedCount + " duplicates.";
-    $("jsonText").value = "";
-  }catch(e){ $("importMessage").textContent = "Error: " + e.message; }
+function login(){
+  const name = $("studentName").value.trim(), school = $("schoolName").value.trim();
+  if(!name || !school){ $("loginMessage").textContent = "Enter name and school."; return; }
+  student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
 }
 
-/* IMPROVED PDF PARSER TO PREVENT TITLE INJECTION */
-function parseDocumentQuestions(rawText, defaultSubject){
-  if(!rawText) throw Error("No text found.");
-  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
-  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
-  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
-  
-  const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
-  const answerKey = Object.create(null);
-  const questionChunks = [];
-  let current = null;
-  let readingAnswerKey = false;
+$("saveQuestionBtn").onclick = function() {
+  const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
+  if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
+  questions.push({question:q, options:opts, answer:Number($("correct").value), subject:normalizeSubject($("addSubject").value), setName:normalizeSet($("addSet").value)});
+  saveQuestions(); $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); $("addMessage").textContent = "Question saved!";
+};
 
-  const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
-  const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
-  const answerLine = /^(?:correct\s+)?answer\s*(?:for\s*(?:question\s*)?)?(\d{1,4})?\s*[:\-.)]?\s*([A-D]|[0-3])\s*$/i;
-  const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
-  const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
+$("continueBtn").onclick = login;
+$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
+$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
+$("importBtn").onclick = () => showPage("importPage");
+$("keyBtn").onclick = () => showPage("keyPage");
 
-  for(const line of lines){
-    if(keyHeader.test(line)){ if(current){questionChunks.push(current);current=null;} readingAnswerKey = true; continue; }
-    if(readingAnswerKey){
-      const k = keyItem.exec(line);
-      if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2]); continue; }
-      readingAnswerKey = false;
-    }
-    const qMatch = questionStart.exec(line);
-    if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
-    if(!current) continue;
-    const opt = optionLine.exec(line);
-    if(opt){ 
-        // If the option is extremely long, it's probably a title mixed in. Truncate it.
-        let optText = opt[2].trim();
-        if(optText.length > 150) optText = optText.substring(0, 150) + "...";
-        current.options[opt[1].toUpperCase().charCodeAt(0)-65] = optText; 
-        continue; 
-    }
-    const inlineAnswer = answerLine.exec(line);
-    if(inlineAnswer){ current.answer = normalizeAnswer(inlineAnswer[2]); continue; }
-    current.parts.push(line);
-  }
-  if(current) questionChunks.push(current);
-
-  const imported = [];
-  for(const item of questionChunks){
-    if(item.options.length !== 4 || item.options.some(o => !o)) continue;
-    const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
-    imported.push({
-      question: item.parts.join(" ").replace(/\s+/g," ").trim(),
-      options: item.options,
-      answer: answer,
-      subject: defaultSubject
-    });
-  }
-  return imported;
-}
-
-async function extractFileText(file){
-  if(file.name.match(/\.(json|txt)$/i)) return await file.text();
-  if(file.name.match(/\.pdf$/i)){
-    const buffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
-    let fullText = "";
-    for(let p=1; p<=pdf.numPages; p++){
-      const page = await pdf.getPage(p);
-      fullText += "\n" + (await page.getTextContent()).items.map(i=>i.str).join(" ") + "\n";
-    }
-    return fullText;
-  }
-  if(file.name.match(/\.docx$/i)){
-    const buffer = await file.arrayBuffer();
-    return (await mammoth.extractRawText({arrayBuffer:buffer})).value || "";
-  }
-  throw Error("Unsupported file.");
-}
-
-async function importFile(){
-  const file = $("jsonFile").files[0];
-  if(!file) { $("importMessage").textContent = "Choose a file first."; return; }
-  $("importMessage").textContent = "Reading file...";
-  
-  try {
-    let setName = $("importSetName").value.trim();
-    if(!setName) setName = file.name.replace(/\.[^/.]+$/, "");
-
-    const rawText = await extractFileText(file);
-    let data = [];
-    if(file.name.match(/\.json$/i)){
-      data = parseQuestionJSON(rawText);
-    } else {
-      data = parseDocumentQuestions(rawText, $("importSubject").value);
-    }
+/* NEW FEATURE: APPLY ANSWER KEY */
+$("applyKeyBtn").onclick = function() {
+    const setName = normalizeSet($("keySetName").value);
+    const keyText = $("keyText").value;
     
-    const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
-    $("importMessage").textContent = "Saved " + res.addedCount + " questions to \"" + setName + "\". Skipped " + res.skippedCount + " duplicates.";
-    $("jsonFile").value = "";
-    $("selectedFile").textContent = "No file selected.";
-  } catch(e) {
-    $("importMessage").textContent = "Error: " + e.message;
-  }
-}
+    if(!keyText.trim()) { $("keyMessage").textContent = "Please paste the answer key."; return; }
+    
+    // Extract answers like "1. A" or "1-A"
+    const answersMap = {};
+    const regex = /(\d+)\s*[.)\-:]?\s*([A-D])/gi;
+    let match;
+    while ((match = regex.exec(keyText)) !== null) {
+        answersMap[match[1]] = normalizeAnswer(match[2]);
+    }
 
-function showBank(){
-  const box = $("bankContent");
-  box.replaceChildren();
-  if(!questions.length){ box.textContent = "Your bank is empty."; return; }
-  
-  const grouped = {};
-  SUBJECTS.forEach(s => grouped[s] = {});
+    let appliedCount = 0;
+    let qIndex = 1;
+    
+    // Apply to the specific set
+    questions.forEach(q => {
+        if(q.setName === setName) {
+            if(answersMap[qIndex] !== undefined) {
+                q.answer = answersMap[qIndex];
+                appliedCount++;
+            }
+            qIndex++;
+        }
+    });
+
+    saveQuestions();
+    $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to the set "${setName}".`;
+    $("keyText").value = "";
+};
+
+$("bankBtn").onclick = () => {
+  const box = $("bankContent"); box.innerHTML = "";
   questions.forEach((q,i) => {
-    const sub = normalizeSubject(q.subject);
-    const set = normalizeSet(q.setName);
-    if(!grouped[sub][set]) grouped[sub][set] = [];
-    grouped[sub][set].push({...q, originalIndex: i});
-  });
-
-  SUBJECTS.forEach(sub => {
-    const sets = Object.keys(grouped[sub]);
-    if(sets.length === 0) return;
-    
-    const sHeader = document.createElement("div");
-    sHeader.className = "subject-header";
-    sHeader.textContent = sub;
-    box.appendChild(sHeader);
-
-    sets.forEach(setName => {
-      const setH = document.createElement("div");
-      setH.className = "set-header";
-      setH.textContent = "📁 " + setName + " (" + grouped[sub][setName].length + ")";
-      box.appendChild(setH);
-
-      grouped[sub][setName].forEach((q) => {
-        const card = document.createElement("div");
-        card.className = "question";
-        card.innerHTML = "<h3>" + q.question + "</h3>";
-        q.options.forEach((o,j) => card.innerHTML += "<p>" + String.fromCharCode(65+j) + ". " + o + "</p>");
-        card.innerHTML += "<p class='small'>Answer: " + (q.answer===null ? 'AI will grade' : String.fromCharCode(65+q.answer)) + "</p>";
-        
-        const del = document.createElement("button");
-        del.textContent = "Delete"; del.className = "danger";
-        del.onclick = () => { if(confirm("Delete?")) { questions.splice(q.originalIndex,1); saveQuestions(); showBank(); } };
-        card.appendChild(del);
-        box.appendChild(card);
-      });
-    });
+    const card = document.createElement("div"); card.className = "question";
+    const ansText = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
+    card.innerHTML = `<h3>[${q.setName}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
+    const del = document.createElement("button"); del.textContent = "Delete"; del.className = "danger";
+    del.onclick = () => { questions.splice(i,1); saveQuestions(); $("bankBtn").click(); }; card.appendChild(del); box.appendChild(card);
   });
   showPage("bankPage");
-}
+};
 
-function startQuiz(which){
-  const chosenSubject = $("quizSubject").value;
-  const chosenSet = $("quizSet").value;
-  const chosenTopic = $("quizTopic").value;
+/* QUIZ ENGINE */
+function startQuiz(type) {
+  let aq = [...questions].sort(() => Math.random() - 0.5);
   const limit = parseInt($("examLimit").value);
+  if(limit > 0 && limit < aq.length) aq = aq.slice(0, limit);
+  if(!aq.length) { alert("No questions available."); return; }
 
-  let availableQuestions = questions.filter(q =>
-    (chosenSubject === "All" || normalizeSubject(q.subject) === chosenSubject) &&
-    (chosenSet === "All" || normalizeSet(q.setName) === chosenSet) &&
-    (chosenTopic === "All" || normalizeTopic(q.topic) === chosenTopic)
-  );
-
-  if(!availableQuestions.length){ alert("No questions match this combination."); return; }
+  mode = type; quiz = aq; answers = new Array(quiz.length).fill(null); index = 0;
+  $("quizHeading").textContent = type === "exam" ? "Examination" : "Practice Mode";
+  $("submitBtn").classList.toggle("hidden", type !== "exam");
   
-  availableQuestions = availableQuestions.sort(() => Math.random() - 0.5);
-  if(limit > 0 && limit < availableQuestions.length) {
-    availableQuestions = availableQuestions.slice(0, limit);
-  }
-
-  if(which === "exam" && !confirm("Start timed exam with " + availableQuestions.length + " questions?")) return;
-  if(timerId) clearInterval(timerId);
-
-  mode = which;
-  quiz = availableQuestions.map(q => ({
-    question:q.question, options:[...q.options], answer:q.answer,
-    subject:normalizeSubject(q.subject), topic:normalizeTopic(q.topic)
-  }));
-
-  answers = new Array(quiz.length).fill(null);
-  index = 0; locked = false;
-  $("quizHeading").textContent = which === "exam" ? "Examination" : "Practice";
-  $("submitBtn").classList.toggle("hidden",which !== "exam");
-  $("quitBtn").classList.remove("hidden"); 
-  $("quizMessage").textContent = "";
-  $("aiLoading").classList.add("hidden");
-
-  if(which === "exam"){
+  if(type === "exam"){
     seconds = minutes * 60;
-    updateTimer();
-    timerId = setInterval(() => { seconds--; updateTimer(); if(seconds <= 0) finish(true); },1000);
+    $("timer").textContent = `Time Left: ${minutes}m`;
+    if(timerId) clearInterval(timerId);
+    timerId = setInterval(() => { seconds--; $("timer").textContent = `Time Left: ${Math.floor(seconds/60)}m ${seconds%60}s`; if(seconds <= 0) finishQuiz(); }, 1000);
   } else {
-    $("timer").textContent = "Practice Mode";
+    $("timer").textContent = "Practice Mode (No Timer)";
+    if(timerId) clearInterval(timerId);
   }
-
-  showPage("quizPage");
-  renderQuestion();
+  showPage("quizPage"); renderQ();
 }
 
-function updateTimer(){
-  $("timer").textContent = String(Math.floor(Math.max(0,seconds)/60)).padStart(2,"0") + ":" + String(Math.max(0,seconds)%60).padStart(2,"0");
-}
+$("examBtn").onclick = () => startQuiz("exam");
+$("practiceBtn").onclick = () => startQuiz("practice");
 
-function renderQuestion(){
-  locked = false;
+window.selAns = (j) => { 
+  answers[index] = j; 
+  if(mode === "practice") { showFeedback(); }
+};
+
+function renderQ(){
   const q = quiz[index];
-  $("position").textContent = "Question " + (index+1) + " of " + quiz.length;
-  const box = $("quizContent"); box.replaceChildren();
-  box.innerHTML = "<p class='small'>" + q.subject + " → " + q.topic + "</p><h3>" + q.question + "</h3>";
-
-  q.options.forEach((option,j) => {
-    const label = document.createElement("label");
-    label.className = "option";
-    const radio = document.createElement("input");
-    radio.type = "radio"; radio.name = "choice"; radio.checked = answers[index] === j;
-    
-    radio.onchange = async function() { 
-      if(locked) return; 
-      answers[index] = j; 
-      if(mode === "practice"){ 
-        locked = true; 
-        if(q.answer === null) {
-           $("quizMessage").textContent = "";
-           $("aiLoading").classList.remove("hidden");
-           const key = localStorage.getItem(API_KEY);
-           if(key) {
-             try { 
-                 const aiAns = await getAIAnswerForSingle(q, key);
-                 if(aiAns !== null) q.answer = aiAns;
-             } catch(e) { 
-                 $("quizMessage").textContent = "AI Error: " + e.message; 
-             }
-           } else {
-               $("quizMessage").textContent = "No API key saved. Cannot use AI.";
-           }
-           $("aiLoading").classList.add("hidden");
-        }
-        showFeedback(); 
-      } 
-    };
-    label.append(radio, document.createTextNode(String.fromCharCode(65+j) + ". " + option));
-    box.appendChild(label);
+  $("position").textContent = `Question ${index+1} of ${quiz.length}`;
+  $("quizMessage").textContent = "";
+  
+  let html = `<h3>${q.question}</h3>`;
+  q.options.forEach((o,j) => {
+    html += `<label class="option" id="opt-${j}">
+      <input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}>
+      <span>${String.fromCharCode(65+j)}. ${o}</span>
+    </label>`;
   });
-
-  $("nextBtn").textContent = index === quiz.length-1 ? "Finish" : "Next →";
-  if(mode === "practice" && answers[index] !== null){ locked = true; showFeedback(); }
+  $("quizContent").innerHTML = html;
+  
+  $("nextBtn").textContent = index === quiz.length - 1 ? "Finish" : "Next Question →";
+  
+  if(mode === "practice" && answers[index] !== null) showFeedback();
 }
 
 function showFeedback(){
   const q = quiz[index];
-  [...$("quizContent").querySelectorAll(".option")].forEach((label,j) => {
-    label.querySelector("input").disabled = true;
-    if(q.answer !== null && j === q.answer) label.style.border = "2px solid #19d3c5";
-    if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
-  });
-  if(q.answer === null) $("quizMessage").textContent = $("quizMessage").textContent || "Saved. (No answer key, AI could not grade).";
-  else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : "Incorrect. Answer: " + String.fromCharCode(65+q.answer);
-}
-
-function nextQuestion(){
-  if(mode === "practice" && answers[index] === null){ $("quizMessage").textContent = "Choose an answer."; return; }
-  if(index < quiz.length-1){ index++; renderQuestion(); }
-  else if(mode === "exam"){ if(confirm("Submit?")) finish(false); }
-  else finish(false);
-}
-
-async function finish(expired){
-  if(timerId) clearInterval(timerId);
-  
-  const key = localStorage.getItem(API_KEY);
-  const ungradedIndices = quiz.map((q, i) => q.answer === null ? i : -1).filter(i => i !== -1);
-  
-  if(ungradedIndices.length > 0 && key) {
-      $("quizMessage").textContent = "";
-      $("aiLoading").classList.remove("hidden");
-      $("aiLoading").textContent = "🤖 AI is grading " + ungradedIndices.length + " questions...";
-      $("submitBtn").disabled = true;
-      $("nextBtn").disabled = true;
-      $("quitBtn").disabled = true;
-
-      for(let i of ungradedIndices) {
-          try {
-              const aiAns = await getAIAnswerForSingle(quiz[i], key);
-              if(aiAns !== null) quiz[i].answer = aiAns;
-          } catch(e) {
-              console.warn("Failed AI grading", e);
-          }
-      }
-      $("submitBtn").disabled = false;
-      $("nextBtn").disabled = false;
-      $("quitBtn").disabled = false;
+  for(let j=0; j<4; j++) {
+    const el = $("opt-"+j);
+    if(!el) continue;
+    el.querySelector("input").disabled = true;
+    if(j === q.answer) el.style.border = "2px solid #19d3c5";
+    if(j === answers[index] && j !== q.answer) el.style.border = "2px solid #ff6577";
   }
-
-  let score = 0, gradable = 0;
-  quiz.forEach((q,i) => { if(q.answer !== null){ gradable++; if(answers[i] === q.answer) score++; } });
-
-  $("resultStudent").textContent = "Student: " + student.name + " · School: " + student.school;
-  $("score").textContent = gradable ? score + " / " + gradable : "No answer key available";
-  
-  const percent = gradable ? Math.round(score/gradable*100) : 0;
-  $("percentage").textContent = gradable ? "Score: " + percent + "% " + (expired ? '· Time Expired' : '') : "Ungraded questions";
-
-  const review = $("review"); review.replaceChildren();
-  quiz.forEach((q,i) => {
-    const card = document.createElement("div"); card.className = "question";
-    card.innerHTML = "<h3>" + (i+1) + ". " + q.question + "</h3>" +
-      "<p>Your answer: " + (answers[i]===null?'None':String.fromCharCode(65+answers[i])) + "</p>" +
-      "<p class='small'>Correct: " + (q.answer===null?'None':String.fromCharCode(65+q.answer)) + "</p>";
-    review.appendChild(card);
-  });
-  mode = ""; 
-  $("aiLoading").classList.add("hidden");
-  showPage("resultPage");
+  if(q.answer === null) $("quizMessage").textContent = "No answer key for this question.";
+  else $("quizMessage").textContent = answers[index] === q.answer ? "✅ Correct!" : `❌ Incorrect. Correct answer: ${String.fromCharCode(65+q.answer)}`;
 }
 
-function refreshDropdowns(){
-  const sub = $("quizSubject").value;
-  const setSelect = $("quizSet");
-  const currentSet = setSelect.value;
-  setSelect.replaceChildren();
-  const allSets = document.createElement("option"); allSets.value = "All"; allSets.textContent = "All Sets"; setSelect.appendChild(allSets);
-  
-  const sets = new Set();
-  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
-  [...sets].sort().forEach(s => {
-    const opt = document.createElement("option"); opt.value = s; opt.textContent = s; setSelect.appendChild(opt);
-  });
-  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
-
-  const topicSelect = $("quizTopic");
-  const currentTopic = topicSelect.value;
-  topicSelect.replaceChildren();
-  const allTopics = document.createElement("option"); allTopics.value = "All"; allTopics.textContent = "All topics"; topicSelect.appendChild(allTopics);
-  
-  const topics = new Set();
-  questions.forEach(q => { 
-    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
-  });
-  [...topics].sort().forEach(t => {
-    const opt = document.createElement("option"); opt.value = t; opt.textContent = t; topicSelect.appendChild(opt);
-  });
-  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
-}
-
-function refreshTopicSuggestions(){
-  const list = $("topicSuggestions"); list.replaceChildren();
-  const sub = $("addSubject").value;
-  const topics = new Set(["General"]);
-  questions.filter(q => q.subject === sub).forEach(q => topics.add(q.topic));
-  [...topics].sort().forEach(t => {
-    const opt = document.createElement("option"); opt.value = t; list.appendChild(opt);
-  });
-}
-
-$("quizSubject").onchange = refreshDropdowns;
-$("quizSet").onchange = refreshDropdowns;
-$("addSubject").onchange = refreshTopicSuggestions;
-$("continueBtn").onclick = login;
-$("saveDurationBtn").onclick = saveDuration;
-$("saveQuestionBtn").onclick = addQuestion;
-$("aiAnswerBtn").onclick = getAIAnswer;
-$("importTextBtn").onclick = importText;
-$("chooseFileBtn").onclick = function() { $("jsonFile").click(); };
-$("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
-$("importFileBtn").onclick = importFile;
-$("examBtn").onclick = function() { startQuiz("exam"); };
-$("practiceBtn").onclick = function() { startQuiz("practice"); };
-$("addBtn").onclick = function() { $("duration").value = minutes; showPage("addPage"); };
-$("importBtn").onclick = function() { showPage("importPage"); };
-$("bankBtn").onclick = showBank;
-$("nextBtn").onclick = nextQuestion;
-$("submitBtn").onclick = function() { finish(false); };
-$("menuResultBtn").onclick = function() { showPage("menuPage"); };
-document.querySelectorAll(".backBtn").forEach(function(b) { b.onclick = function() { showPage("menuPage"); }; });
-
-$("quitBtn").onclick = function() {
-    if(mode === "exam" && !confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
-    if(timerId) clearInterval(timerId);
-    mode = "";
-    showPage("menuPage");
+$("nextBtn").onclick = () => { 
+  if(mode === "practice" && answers[index] === null) { $("quizMessage").textContent = "Please select an answer first."; return; }
+  if(index < quiz.length-1){ index++; renderQ(); } 
+  else { finishQuiz(); } 
 };
 
-updateCount(); refreshTopicSuggestions(); refreshDropdowns();
+$("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
+
+function finishQuiz(){
+  if(timerId) clearInterval(timerId);
+  let score = 0, gradable = 0;
+  quiz.forEach((q,i) => { if(q.answer !== null) { gradable++; if(answers[i] === q.answer) score++; } });
+  
+  const percent = gradable > 0 ? Math.round((score / gradable) * 100) : 0;
+  
+  $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
+  $("score").textContent = gradable > 0 ? `Score: ${score} / ${gradable}` : "No answer key available";
+  $("percentage").textContent = gradable > 0 ? `Percentage: ${percent}%` : "Ungraded questions";
+  
+  let reviewHtml = "";
+  quiz.forEach((q,i) => {
+    const ansTxt = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
+    reviewHtml += `<div class="question">
+      <p><strong>Q${i+1}: ${q.question}</strong></p>
+      <p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p>
+      <p class="small" style="color:#19d3c5;">Correct answer: ${ansTxt}</p>
+    </div>`;
+  });
+  $("review").innerHTML = reviewHtml;
+  
+  mode = ""; showPage("resultPage");
+}
+
+$("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
+$("menuResultBtn").onclick = () => showPage("menuPage");
+document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
+updateCount();
 })();
 </script>
 </body>
