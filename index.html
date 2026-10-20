@@ -86,7 +86,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="practiceBtn" class="secondary">📚 Start Practice</button>
 <button id="addBtn" class="secondary">➕ Add Questions</button>
 <button id="importBtn" class="secondary">📥 Import Questions</button>
-<button id="keyBtn" class="secondary" style="grid-column: span 2; background: #ff9800; color: white;">🔑 Apply Answer Key</button>
+<button id="keyBtn" class="secondary" style="grid-column: span 2; background: #ff9800; color: white;">🔑 Apply Answer Key (Manual)</button>
 <button id="bankBtn" class="secondary" style="grid-column: span 2;">🗂 Question Bank</button>
 <button id="adminBtn" class="secondary" style="grid-column: span 2; background: #4caf50; color: white;">📊 Teacher Dashboard</button>
 </div>
@@ -138,7 +138,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <label>Default Topic</label>
 <input id="importTopic" placeholder="e.g., Cell Biology">
 
-<p class="small">This imports the questions. If they don't have answers, go to "Apply Answer Key" on the menu.</p>
+<p class="small">This imports the questions. They will have no answers by default. You can use the "Apply Answer Key" button or the AI in the Teacher Dashboard to fill them in.</p>
 <label>Paste JSON questions</label>
 <textarea id="jsonText" placeholder="Paste JSON here"></textarea>
 <button id="importTextBtn">Import Pasted JSON</button>
@@ -153,7 +153,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 </section>
 
 <section id="keyPage" class="card hidden">
-<h2>🔑 Apply Answer Key</h2>
+<h2>🔑 Apply Answer Key (Manual)</h2>
 <p class="small">Enter your answer key below (e.g., "1. A, 2. C, 3. B"). The app will find the matching questions and apply the answers.</p>
 <label>Subject</label>
 <select id="keySubject">
@@ -175,9 +175,23 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
+<!-- TEACHER DASHBOARD WITH AI -->
 <section id="adminPage" class="card hidden">
 <h2>📊 Teacher Dashboard</h2>
-<p class="small">Below are the recent exam results submitted by students.</p>
+
+<!-- NEW AI BOX -->
+<div class="info" style="border: 1px solid #19d3c5;">
+    <h3 style="margin-top: 0; color: #19d3c5;">🤖 AI Auto-Grader</h3>
+    <p class="small">Paste your free Groq API Key here. Get one at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>. Saved locally on this device.</p>
+    <input id="groqApiKey" type="password" placeholder="Paste Groq API Key (gsk_...)">
+    <button id="saveAiKeyBtn" class="secondary" type="button">Save Key</button>
+    
+    <p class="small" style="margin-top: 15px;">Click below to automatically find answers for all questions that are currently missing an answer.</p>
+    <button id="autoGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers</button>
+    <p id="aiProgress" class="small" style="color: #19d3c5; font-weight: bold;"></p>
+</div>
+
+<h3>📈 Student Results</h3>
 <button id="refreshResultsBtn" class="secondary">🔄 Refresh Results</button>
 <div id="resultsContainer" style="margin-top: 15px;">
     <p id="loadingResults" class="small">Loading results...</p>
@@ -224,10 +238,8 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
-// NEW: Sign in anonymously so we can write to the secure database
 auth.signInAnonymously().catch((error) => {
   console.error("Auth Error:", error.code, error.message);
-  alert("Could not authenticate with the database. Make sure Anonymous sign-in is enabled.");
 });
 
 const $ = id => document.getElementById(id);
@@ -235,23 +247,24 @@ const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage
 let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
 const MINUTES_KEY = "smartExamFixedMinutes";
+const AI_KEY_STORAGE = "smartExamGroqKey";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeSet(value){ return String(value || "").trim() || "Default Set"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
-
 function normalizeAnswer(value){
   if(value === null || value === undefined) return null;
   if(typeof value === "number" && value >= 0 && value <= 3) return value;
   const text = String(value).trim().toUpperCase();
   if(["A","B","C","D"].includes(text)) return text.charCodeAt(0)-65;
-  if(["0","1","2","3"].includes(text)) return Number(text);
   return null;
 }
 
 try{
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
   if(savedMinutes >= 1) minutes = savedMinutes;
+  const savedKey = localStorage.getItem(AI_KEY_STORAGE);
+  if(savedKey) $("groqApiKey").value = savedKey;
 }catch(e){}
 
 $("loadingData").classList.remove("hidden");
@@ -265,7 +278,6 @@ db.collection("questions").onSnapshot((snapshot) => {
   refreshDropdowns();
   $("loadingData").classList.add("hidden");
 }, (error) => {
-  console.error("Error loading data: ", error);
   $("loadingData").textContent = "Error connecting to database.";
 });
 
@@ -293,55 +305,101 @@ $("saveQuestionBtn").onclick = function() {
   const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
   if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
   
-  $("addMessage").textContent = "Saving to cloud...";
-  
+  $("addMessage").textContent = "Saving...";
   db.collection("questions").add({
     question: q, options: opts, answer: Number($("correct").value), 
-    subject: normalizeSubject($("addSubject").value), 
-    setName: normalizeSet($("addSet").value), 
-    topic: normalizeTopic($("addTopic").value)
+    subject: normalizeSubject($("addSubject").value), setName: normalizeSet($("addSet").value), topic: normalizeTopic($("addTopic").value)
   }).then(() => {
     $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); 
-    $("addMessage").textContent = "Question saved to cloud successfully!";
-  }).catch((error) => {
-    $("addMessage").textContent = "Error saving: " + error.message;
+    $("addMessage").textContent = "Saved!";
   });
 };
 
 $("continueBtn").onclick = login;
-$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved locally."; } };
+$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
 $("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
 $("importBtn").onclick = () => showPage("importPage");
 $("keyBtn").onclick = () => showPage("keyPage");
 
 $("adminBtn").onclick = () => {
     const pin = prompt("Enter Teacher PIN:");
-    if (pin === "1234") {
-        showPage("adminPage");
-    } else if (pin !== null) {
-        alert("Incorrect PIN.");
-    }
+    if (pin === "1234") showPage("adminPage");
+    else if (pin !== null) alert("Incorrect PIN.");
 };
+
+/* ================= AI AUTO-GRADER ================= */
+$("saveAiKeyBtn").onclick = function() {
+    const key = $("groqApiKey").value.trim();
+    if(!key.startsWith("gsk_")) { alert("This doesn't look like a Groq key. It should start with 'gsk_'."); return; }
+    localStorage.setItem(AI_KEY_STORAGE, key);
+    alert("AI Key saved successfully to this phone!");
+};
+
+$("autoGenerateBtn").onclick = async function() {
+    const key = localStorage.getItem(AI_KEY_STORAGE);
+    if(!key) { alert("Please paste and save your Groq API Key first."); return; }
+    
+    // Find questions with no answer
+    const missing = questions.filter(q => q.answer === null);
+    if(missing.length === 0) { $("aiProgress").textContent = "All questions already have answers!"; return; }
+    
+    $("autoGenerateBtn").disabled = true;
+    $("autoGenerateBtn").textContent = "Working...";
+    let successCount = 0;
+    
+    for(let i = 0; i < missing.length; i++) {
+        const q = missing[i];
+        $("aiProgress").textContent = `Asking AI for answer ${i+1} of ${missing.length}...`;
+        
+        const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question. Reply with ONLY the letter A, B, C, or D.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
+        
+        try {
+            const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+                body: JSON.stringify({ 
+                    model: "llama-3.3-70b-versatile", 
+                    messages: [{ role: "user", content: prompt }],
+                    temperature: 0
+                })
+            });
+            const data = await res.json();
+            if(data.error) throw new Error(data.error.message);
+            
+            const aiText = data.choices[0].message.content.toUpperCase();
+            const match = aiText.match(/[A-D]/);
+            
+            if(match) {
+                const ansIndex = match[0].charCodeAt(0) - 65;
+                await db.collection("questions").doc(q.id).update({ answer: ansIndex });
+                successCount++;
+            }
+        } catch(e) {
+            console.error("AI failed for Q:", q.question, e);
+            // Don't crash, just skip to the next question
+        }
+        // Small delay to prevent API rate-limiting
+        await new Promise(r => setTimeout(r, 500));
+    }
+    
+    $("aiProgress").textContent = `✅ Finished! Successfully generated ${successCount} answers out of ${missing.length}.`;
+    $("autoGenerateBtn").disabled = false;
+    $("autoGenerateBtn").textContent = "✨ Auto-Generate Missing Answers";
+};
+/* ================================================= */
 
 function loadStudentResults() {
     const container = $("resultsContainer");
     container.innerHTML = "<p class='small'>Fetching results...</p>";
-    
     db.collection("results").orderBy("date", "desc").get().then((snapshot) => {
         container.innerHTML = "";
-        if (snapshot.empty) {
-            container.innerHTML = "<p class='small'>No student has taken an exam yet.</p>";
-            return;
-        }
-        
+        if (snapshot.empty) { container.innerHTML = "<p class='small'>No student has taken an exam yet.</p>"; return; }
         snapshot.forEach((doc) => {
             const data = doc.data();
             const dateObj = new Date(data.date);
             const dateStr = dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString();
-            
             const div = document.createElement("div");
             div.className = `result-card ${data.percentage >= 50 ? 'pass' : 'fail'}`;
-            
             div.innerHTML = `
                 <div class="result-header">
                     <span>${data.studentName} (${data.school})</span>
@@ -353,17 +411,11 @@ function loadStudentResults() {
             `;
             container.appendChild(div);
         });
-    }).catch((error) => {
-        container.innerHTML = "<p class='small' style='color:#ff6577'>Error loading results: " + error.message + "</p>";
-    });
+    }).catch((error) => { container.innerHTML = "<p class='small' style='color:#ff6577'>Error: " + error.message + "</p>"; });
 }
 
 window.deleteResult = function(id) {
-    if(confirm("Delete this result permanently?")) {
-        db.collection("results").doc(id).delete().then(() => {
-            loadStudentResults(); 
-        });
-    }
+    if(confirm("Delete this result permanently?")) db.collection("results").doc(id).delete().then(() => loadStudentResults());
 };
 
 $("refreshResultsBtn").onclick = loadStudentResults;
@@ -380,10 +432,7 @@ $("applyKeyBtn").onclick = function() {
     while ((match = regex.exec(keyText)) !== null) { answersMap[match[1]] = normalizeAnswer(match[2]); }
     
     const questionsToUpdate = questions.filter(q => q.setName === setName && q.subject === subName);
-    if (questionsToUpdate.length === 0) {
-        $("keyMessage").textContent = "No questions found for this Subject and Set Name.";
-        return;
-    }
+    if (questionsToUpdate.length === 0) { $("keyMessage").textContent = "No questions found for this Subject and Set Name."; return; }
 
     $("keyMessage").textContent = "Applying answers...";
     let batch = db.batch();
@@ -392,18 +441,15 @@ $("applyKeyBtn").onclick = function() {
     questionsToUpdate.forEach((q, idx) => {
         const qNum = idx + 1;
         if(answersMap[qNum] !== undefined) {
-            const docRef = db.collection("questions").doc(q.id);
-            batch.update(docRef, { answer: answersMap[qNum] });
+            batch.update(db.collection("questions").doc(q.id), { answer: answersMap[qNum] });
             appliedCount++;
         }
     });
 
     batch.commit().then(() => {
-        $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers to the cloud.`;
+        $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers.`;
         $("keyText").value = "";
-    }).catch((err) => {
-        $("keyMessage").textContent = "Error updating: " + err.message;
-    });
+    }).catch((err) => { $("keyMessage").textContent = "Error: " + err.message; });
 };
 
 $("bankBtn").onclick = () => {
@@ -412,93 +458,63 @@ $("bankBtn").onclick = () => {
     const card = document.createElement("div"); card.className = "question";
     const ansText = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
     card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
-    
     const del = document.createElement("button"); del.textContent = "Delete from Cloud"; del.className = "danger";
-    del.onclick = () => { 
-        if(confirm("Delete this question permanently from the cloud?")) { 
-            db.collection("questions").doc(q.id).delete();
-        } 
-    }; 
+    del.onclick = () => { if(confirm("Delete permanently?")) db.collection("questions").doc(q.id).delete(); }; 
     card.appendChild(del); box.appendChild(card);
   });
   showPage("bankPage");
 };
 
 function startQuiz(type) {
-  const sub = $("quizSubject").value;
-  const set = $("quizSet").value;
-  const top = $("quizTopic").value;
-  const limit = parseInt($("examLimit").value);
-
-  let aq = questions.filter(q => 
-    (sub === "All" || q.subject === sub) &&
-    (set === "All" || q.setName === set) &&
-    (top === "All" || q.topic === top)
-  ).sort(() => Math.random() - 0.5);
-
+  const sub = $("quizSubject").value, set = $("quizSet").value, top = $("quizTopic").value, limit = parseInt($("examLimit").value);
+  let aq = questions.filter(q => (sub === "All" || q.subject === sub) && (set === "All" || q.setName === set) && (top === "All" || q.topic === top)).sort(() => Math.random() - 0.5);
   if(limit > 0 && limit < aq.length) aq = aq.slice(0, limit);
-  if(!aq.length) { alert("No questions match this combination."); return; }
+  if(!aq.length) { alert("No questions match."); return; }
 
   mode = type; quiz = aq; answers = new Array(quiz.length).fill(null); index = 0;
   $("quizHeading").textContent = type === "exam" ? "Examination" : "Practice Mode";
   $("submitBtn").classList.toggle("hidden", type !== "exam");
   
   if(type === "exam"){
-    seconds = minutes * 60;
-    $("timer").textContent = `Time Left: ${minutes}m`;
+    seconds = minutes * 60; $("timer").textContent = `Time Left: ${minutes}m`;
     if(timerId) clearInterval(timerId);
     timerId = setInterval(() => { seconds--; $("timer").textContent = `Time Left: ${Math.floor(seconds/60)}m ${seconds%60}s`; if(seconds <= 0) finishQuiz(); }, 1000);
-  } else {
-    $("timer").textContent = "Practice Mode (No Timer)";
-    if(timerId) clearInterval(timerId);
-  }
+  } else { $("timer").textContent = "Practice Mode"; if(timerId) clearInterval(timerId); }
   showPage("quizPage"); renderQ();
 }
 
 $("examBtn").onclick = () => startQuiz("exam");
 $("practiceBtn").onclick = () => startQuiz("practice");
 
-window.selAns = (j) => { 
-  answers[index] = j; 
-  if(mode === "practice") { showFeedback(); }
-};
+window.selAns = (j) => { answers[index] = j; if(mode === "practice") showFeedback(); };
 
 function renderQ(){
   const q = quiz[index];
   $("position").textContent = `Question ${index+1} of ${quiz.length}`;
   $("quizMessage").textContent = "";
-  
   let html = `<h3>${q.question}</h3>`;
   q.options.forEach((o,j) => {
-    html += `<label class="option" id="opt-${j}">
-      <input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}>
-      <span>${String.fromCharCode(65+j)}. ${o}</span>
-    </label>`;
+    html += `<label class="option" id="opt-${j}"><input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}><span>${String.fromCharCode(65+j)}. ${o}</span></label>`;
   });
   $("quizContent").innerHTML = html;
-  
   $("nextBtn").textContent = index === quiz.length - 1 ? "Finish" : "Next Question →";
-  
   if(mode === "practice" && answers[index] !== null) showFeedback();
 }
 
 function showFeedback(){
   const q = quiz[index];
   for(let j=0; j<4; j++) {
-    const el = $("opt-"+j);
-    if(!el) continue;
+    const el = $("opt-"+j); if(!el) continue;
     el.querySelector("input").disabled = true;
     if(j === q.answer) el.style.border = "2px solid #19d3c5";
     if(j === answers[index] && j !== q.answer) el.style.border = "2px solid #ff6577";
   }
-  if(q.answer === null) $("quizMessage").textContent = "No answer key for this question.";
-  else $("quizMessage").textContent = answers[index] === q.answer ? "✅ Correct!" : `❌ Incorrect. Correct answer: ${String.fromCharCode(65+q.answer)}`;
+  $("quizMessage").textContent = q.answer === null ? "No answer key." : (answers[index] === q.answer ? "✅ Correct!" : `❌ Incorrect. Correct: ${String.fromCharCode(65+q.answer)}`);
 }
 
 $("nextBtn").onclick = () => { 
-  if(mode === "practice" && answers[index] === null) { $("quizMessage").textContent = "Please select an answer first."; return; }
-  if(index < quiz.length-1){ index++; renderQ(); } 
-  else { finishQuiz(); } 
+  if(mode === "practice" && answers[index] === null) { $("quizMessage").textContent = "Select an answer."; return; }
+  if(index < quiz.length-1){ index++; renderQ(); } else finishQuiz();
 };
 
 $("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
@@ -507,63 +523,44 @@ function finishQuiz(){
   if(timerId) clearInterval(timerId);
   let score = 0, gradable = 0;
   quiz.forEach((q,i) => { if(q.answer !== null) { gradable++; if(answers[i] === q.answer) score++; } });
-  
   const percent = gradable > 0 ? Math.round((score / gradable) * 100) : 0;
   
-  let comment = ""; let color = "";
-  if (percent >= 80) { comment = "🏆 Excellent! You have mastered this topic."; color = "#19d3c5"; } 
-  else if (percent >= 50) { comment = "👍 Good effort! Keep practicing to improve."; color = "#ff9800"; } 
-  else { comment = "⚠️ Needs Improvement. Don't give up!"; color = "#ff6577"; }
+  let comment = "", color = "";
+  if (percent >= 80) { comment = "🏆 Excellent!"; color = "#19d3c5"; } 
+  else if (percent >= 50) { comment = "👍 Good effort!"; color = "#ff9800"; } 
+  else { comment = "⚠️ Needs Improvement."; color = "#ff6577"; }
 
   $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
-  $("score").textContent = gradable > 0 ? `Score: ${score} / ${gradable}` : "No answer key available";
+  $("score").textContent = gradable > 0 ? `Score: ${score} / ${gradable}` : "No answer key";
   $("score").style.color = color;
-  $("percentage").innerHTML = gradable > 0 ? `Percentage: ${percent}%<br><span style="font-size:16px;">${comment}</span>` : "Ungraded questions";
+  $("percentage").innerHTML = gradable > 0 ? `Percentage: ${percent}%<br><span style="font-size:16px;">${comment}</span>` : "Ungraded";
   $("percentage").style.color = color;
 
   if (mode === "exam" && gradable > 0) {
-      db.collection("results").add({
-          studentName: student.name,
-          school: student.school,
-          score: score,
-          total: gradable,
-          percentage: percent,
-          date: new Date().toISOString()
-      }).catch(e => console.log("Error saving result:", e));
+      db.collection("results").add({ studentName: student.name, school: student.school, score: score, total: gradable, percentage: percent, date: new Date().toISOString() });
   }
   
   let reviewHtml = "";
   quiz.forEach((q,i) => {
-    const ansTxt = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
-    reviewHtml += `<div class="question">
-      <p><strong>Q${i+1}: ${q.question}</strong></p>
-      <p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p>
-      <p class="small" style="color:#19d3c5;">Correct answer: ${ansTxt}</p>
-    </div>`;
+    reviewHtml += `<div class="question"><p><strong>Q${i+1}: ${q.question}</strong></p><p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p><p class="small" style="color:#19d3c5;">Correct: ${q.answer!==null?String.fromCharCode(65+q.answer):"None"}</p></div>`;
   });
   $("review").innerHTML = reviewHtml;
-  
   mode = ""; showPage("resultPage");
 }
 
 function refreshDropdowns(){
   const sub = $("quizSubject").value;
-  
-  const setSelect = $("quizSet");
-  const currentSet = setSelect.value;
+  const setSelect = $("quizSet"), currentSet = setSelect.value;
   setSelect.innerHTML = `<option value="All">All Sets</option>`;
   const sets = new Set();
   questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
   [...sets].sort().forEach(s => setSelect.innerHTML += `<option value="${s}">${s}</option>`);
   if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
 
-  const topicSelect = $("quizTopic");
-  const currentTopic = topicSelect.value;
+  const topicSelect = $("quizTopic"), currentTopic = topicSelect.value;
   topicSelect.innerHTML = `<option value="All">All topics</option>`;
   const topics = new Set();
-  questions.forEach(q => { 
-    if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); 
-  });
+  questions.forEach(q => { if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); });
   [...topics].sort().forEach(t => topicSelect.innerHTML += `<option value="${t}">${t}</option>`);
   if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
 }
@@ -575,76 +572,42 @@ $("menuResultBtn").onclick = () => showPage("menuPage");
 document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
 
 function saveImportedQuestions(importedData) {
-    if(!importedData.length) { $("importMessage").textContent = "No valid questions found."; return; }
-    $("importMessage").textContent = "Uploading questions to cloud...";
-    
+    if(!importedData.length) { $("importMessage").textContent = "No valid questions."; return; }
+    $("importMessage").textContent = "Uploading to cloud...";
     let batch = db.batch();
-    importedData.forEach(q => {
-        const newDocRef = db.collection("questions").doc();
-        batch.set(newDocRef, q);
-    });
+    importedData.forEach(q => { batch.set(db.collection("questions").doc(), q); });
     batch.commit().then(() => {
-        $("importMessage").textContent = "✅ Questions imported to cloud successfully!";
-        $("jsonText").value = "";
-        $("jsonFile").value = "";
-        $("selectedFile").textContent = "No file selected.";
-    }).catch(err => $("importMessage").textContent = "Error importing: " + err.message);
+        $("importMessage").textContent = "✅ Imported successfully!";
+        $("jsonText").value = ""; $("jsonFile").value = ""; $("selectedFile").textContent = "No file selected.";
+    }).catch(err => $("importMessage").textContent = "Error: " + err.message);
 }
 
-function parseQuestionJSON(text){
-  if(!text) throw Error("Empty JSON.");
-  try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON format."); }
-}
-
+function parseQuestionJSON(text){ try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON."); } }
 function processImported(data, defaultSubject, defaultTopic, defaultSetName){
   if(!Array.isArray(data) || data.length === 0) throw Error("Needs a non-empty array.");
-  return data.map(q => ({
-      question: q.question.trim(),
-      options: q.options.map(o => String(o).trim()),
-      answer: normalizeAnswer(q.answer),
-      subject: normalizeSubject(q.subject || defaultSubject),
-      setName: normalizeSet(q.setName || defaultSetName),
-      topic: normalizeTopic(q.topic || defaultTopic)
-  })).filter(q => q.question && q.options.length === 4);
+  return data.map(q => ({ question: q.question.trim(), options: q.options.map(o => String(o).trim()), answer: normalizeAnswer(q.answer), subject: normalizeSubject(q.subject || defaultSubject), setName: normalizeSet(q.setName || defaultSetName), topic: normalizeTopic(q.topic || defaultTopic) })).filter(q => q.question && q.options.length === 4);
 }
 
 function parseDocumentQuestions(rawText, defaultSubject){
-  if(!rawText) throw Error("No text found.");
-  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
-  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
-  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
-  
+  if(!rawText) throw Error("No text.");
+  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ").replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n").replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
   const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
-  const answerKey = Object.create(null);
-  const questionChunks = [];
-  let current = null;
-  let readingAnswerKey = false;
+  const answerKey = Object.create(null), questionChunks = [];
+  let current = null, readingAnswerKey = false;
 
   const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
   const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
-  const answerLine = /^(?:correct\s+)?answer\s*(?:for\s*(?:question\s*)?)?(\d{1,4})?\s*[:\-.)]?\s*([A-D]|[0-3])\s*$/i;
   const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
   const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
 
   for(const line of lines){
     if(keyHeader.test(line)){ if(current){questionChunks.push(current);current=null;} readingAnswerKey = true; continue; }
-    if(readingAnswerKey){
-      const k = keyItem.exec(line);
-      if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2]); continue; }
-      readingAnswerKey = false;
-    }
+    if(readingAnswerKey){ const k = keyItem.exec(line); if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2]); continue; } readingAnswerKey = false; }
     const qMatch = questionStart.exec(line);
     if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
     if(!current) continue;
     const opt = optionLine.exec(line);
-    if(opt){ 
-        let optText = opt[2].trim();
-        if(optText.length > 150) optText = optText.substring(0, 150) + "...";
-        current.options[opt[1].toUpperCase().charCodeAt(0)-65] = optText; 
-        continue; 
-    }
-    const inlineAnswer = answerLine.exec(line);
-    if(inlineAnswer){ current.answer = normalizeAnswer(inlineAnswer[2]); continue; }
+    if(opt){ current.options[opt[1].toUpperCase().charCodeAt(0)-65] = opt[2].trim().substring(0,150); continue; }
     current.parts.push(line);
   }
   if(current) questionChunks.push(current);
@@ -653,12 +616,7 @@ function parseDocumentQuestions(rawText, defaultSubject){
   for(const item of questionChunks){
     if(item.options.length !== 4 || item.options.some(o => !o)) continue;
     const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
-    imported.push({
-      question: item.parts.join(" ").replace(/\s+/g," ").trim(),
-      options: item.options,
-      answer: answer,
-      subject: defaultSubject
-    });
+    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: item.options, answer: answer, subject: defaultSubject });
   }
   return imported;
 }
@@ -669,10 +627,7 @@ async function extractFileText(file){
     const buffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
     let fullText = "";
-    for(let p=1; p<=pdf.numPages; p++){
-      const page = await pdf.getPage(p);
-      fullText += "\n" + (await page.getTextContent()).items.map(i=>i.str).join(" ") + "\n";
-    }
+    for(let p=1; p<=pdf.numPages; p++) fullText += "\n" + (await (await pdf.getPage(p)).getTextContent()).items.map(i=>i.str).join(" ") + "\n";
     return fullText;
   }
   if(file.name.match(/\.docx$/i)){
@@ -683,12 +638,8 @@ async function extractFileText(file){
 }
 
 $("importTextBtn").onclick = () => {
-    try {
-        const setName = $("importSetName").value.trim() || "Pasted JSON Set";
-        const data = parseQuestionJSON($("jsonText").value);
-        const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
-        saveImportedQuestions(res);
-    } catch(e) { $("importMessage").textContent = "Error: " + e.message; }
+    try { const res = processImported(parseQuestionJSON($("jsonText").value), $("importSubject").value, $("importTopic").value, $("importSetName").value.trim() || "Pasted JSON Set"); saveImportedQuestions(res); } 
+    catch(e) { $("importMessage").textContent = "Error: " + e.message; }
 };
 
 $("chooseFileBtn").onclick = () => $("jsonFile").click();
@@ -697,25 +648,13 @@ $("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[
 $("importFileBtn").onclick = async function() {
   const file = $("jsonFile").files[0];
   if(!file) { $("importMessage").textContent = "Choose a file first."; return; }
-  $("importMessage").textContent = "Reading file...";
-  
+  $("importMessage").textContent = "Reading...";
   try {
-    let setName = $("importSetName").value.trim();
-    if(!setName) setName = file.name.replace(/\.[^/.]+$/, "");
-
+    let setName = $("importSetName").value.trim() || file.name.replace(/\.[^/.]+$/, "");
     const rawText = await extractFileText(file);
-    let data = [];
-    if(file.name.match(/\.json$/i)){
-      data = parseQuestionJSON(rawText);
-    } else {
-      data = parseDocumentQuestions(rawText, $("importSubject").value);
-    }
-    
-    const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
-    saveImportedQuestions(res);
-  } catch(e) {
-    $("importMessage").textContent = "Error: " + e.message;
-  }
+    let data = file.name.match(/\.json$/i) ? parseQuestionJSON(rawText) : parseDocumentQuestions(rawText, $("importSubject").value);
+    saveImportedQuestions(processImported(data, $("importSubject").value, $("importTopic").value, setName));
+  } catch(e) { $("importMessage").textContent = "Error: " + e.message; }
 };
 
 updateCount(); refreshDropdowns();
