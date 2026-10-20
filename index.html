@@ -66,6 +66,15 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <div class="info">Total Questions available (Cloud): <strong id="count">0</strong></div>
 <div id="loadingData" class="hidden">Connecting to Cloud Database...</div>
 
+<!-- AI SETUP ON MAIN MENU -->
+<div class="info" style="border: 1px solid #19d3c5;">
+    <h3 style="margin-top: 0; color: #19d3c5;">🤖 AI Setup</h3>
+    <p class="small">Paste your free Groq API Key to enable real-time AI explanations in Practice Mode.</p>
+    <input id="mainGroqApiKey" type="password" placeholder="Paste Groq API Key (gsk_...)">
+    <button id="saveMainAiKeyBtn" class="secondary" type="button">Save AI Key</button>
+    <p id="mainAiStatus" class="small" style="color:#19d3c5;"></p>
+</div>
+
 <label for="quizSubject">Subject</label>
 <select id="quizSubject">
 <option value="All">All subjects</option>
@@ -139,7 +148,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <label>Default Topic</label>
 <input id="importTopic" placeholder="e.g., Cell Biology">
 
-<p class="small">This imports the questions. They will have no answers by default. You can use the "Apply Answer Key" button or the AI in the Teacher Dashboard to fill them in.</p>
+<p class="small">This imports the questions. They will have no answers by default. Use Practice Mode to trigger AI generation, or use the Manual Key.</p>
 <label>Paste JSON questions</label>
 <textarea id="jsonText" placeholder="Paste JSON here"></textarea>
 <button id="importTextBtn">Import Pasted JSON</button>
@@ -178,18 +187,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <section id="adminPage" class="card hidden">
 <h2>📊 Teacher Dashboard</h2>
-
-<div class="info" style="border: 1px solid #19d3c5;">
-    <h3 style="margin-top: 0; color: #19d3c5;">🤖 AI Auto-Grader</h3>
-    <p class="small">Paste your free Groq API Key here. Get one at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>. Saved locally on this device.</p>
-    <input id="groqApiKey" type="password" placeholder="Paste Groq API Key (gsk_...)">
-    <button id="saveAiKeyBtn" class="secondary" type="button">Save Key</button>
-    
-    <p class="small" style="margin-top: 15px;">Click below to automatically find answers AND generate explanations for all questions missing an answer.</p>
-    <button id="autoGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers & Explanations</button>
-    <p id="aiProgress" class="small" style="color: #19d3c5; font-weight: bold;"></p>
-</div>
-
 <h3>📈 Student Results</h3>
 <button id="refreshResultsBtn" class="secondary">🔄 Refresh Results</button>
 <div id="resultsContainer" style="margin-top: 15px;">
@@ -263,7 +260,7 @@ try{
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
   if(savedMinutes >= 1) minutes = savedMinutes;
   const savedKey = localStorage.getItem(AI_KEY_STORAGE);
-  if(savedKey) $("groqApiKey").value = savedKey;
+  if(savedKey) { $("mainGroqApiKey").value = savedKey; $("mainAiStatus").textContent = "✅ AI Key is saved."; }
 }catch(e){}
 
 $("loadingData").classList.remove("hidden");
@@ -300,56 +297,35 @@ function login(){
   student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
 }
 
-$("saveQuestionBtn").onclick = function() {
-  const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
-  if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
-  
-  $("addMessage").textContent = "Saving...";
-  db.collection("questions").add({
-    question: q, options: opts, answer: Number($("correct").value), explanation: "",
-    subject: normalizeSubject($("addSubject").value), setName: normalizeSet($("addSet").value), topic: normalizeTopic($("addTopic").value)
-  }).then(() => {
-    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); 
-    $("addMessage").textContent = "Saved!";
-  });
-};
-
-$("continueBtn").onclick = login;
-$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
-$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
-$("importBtn").onclick = () => showPage("importPage");
-$("keyBtn").onclick = () => showPage("keyPage");
-
-$("adminBtn").onclick = () => {
-    const pin = prompt("Enter Teacher PIN:");
-    if (pin === "1234") showPage("adminPage");
-    else if (pin !== null) alert("Incorrect PIN.");
-};
-
-/* ================= AI AUTO-GRADER & EXPLANATIONS ================= */
-$("saveAiKeyBtn").onclick = function() {
-    const key = $("groqApiKey").value.trim();
+/* ================= AI SETUP ON MAIN MENU ================= */
+$("saveMainAiKeyBtn").onclick = function() {
+    const key = $("mainGroqApiKey").value.trim();
     if(!key.startsWith("gsk_")) { alert("This doesn't look like a Groq key. It should start with 'gsk_'."); return; }
     localStorage.setItem(AI_KEY_STORAGE, key);
-    alert("AI Key saved successfully to this phone!");
+    $("mainAiStatus").textContent = "✅ AI Key saved successfully to this phone!";
 };
 
-$("autoGenerateBtn").onclick = async function() {
-    const key = localStorage.getItem(AI_KEY_STORAGE);
-    if(!key) { alert("Please paste and save your Groq API Key first."); return; }
-    
-    const missing = questions.filter(q => q.answer === null || q.answer === undefined);
-    if(missing.length === 0) { $("aiProgress").textContent = "All questions already have answers!"; return; }
-    
-    $("autoGenerateBtn").disabled = true;
-    $("autoGenerateBtn").textContent = "Working...";
-    let successCount = 0;
-    
-    for(let i = 0; i < missing.length; i++) {
-        const q = missing[i];
-        $("aiProgress").textContent = `Asking AI for answer & explanation ${i+1} of ${missing.length}...`;
-        
-        const prompt = `You are an exam grader. Determine the correct answer and provide a brief explanation (max 2 sentences) for the following multiple-choice question.
+/* ================= REAL-TIME AI IN PRACTICE MODE ================= */
+window.selAns = async (j) => { 
+  answers[index] = j; 
+  if(mode === "practice") { 
+      const q = quiz[index];
+      
+      // If answer is missing, trigger AI
+      if (q.answer === null || q.answer === undefined) {
+          const key = localStorage.getItem(AI_KEY_STORAGE);
+          if (!key) {
+              $("quizMessage").innerHTML = "⚠️ No Answer Key. Please save an AI Key on the main menu to auto-grade.";
+              return;
+          }
+          
+          $("quizMessage").innerHTML = "<span style='color:#19d3c5'>🤖 AI is analyzing the question and generating an explanation...</span>";
+          
+          // Disable options while loading
+          for(let x=0; x<4; x++) { const el = $("opt-"+x); if(el) el.querySelector("input").disabled = true; }
+          
+          try {
+              const prompt = `You are an exam grader. Determine the correct answer and provide a brief explanation (max 2 sentences) for the following multiple-choice question.
 Question: ${q.question}
 A) ${q.options[0]}
 B) ${q.options[1]}
@@ -357,44 +333,46 @@ C) ${q.options[2]}
 D) ${q.options[3]}
 
 Respond in JSON format strictly like this example: {"answer": "A", "explanation": "Because the mitochondria is the powerhouse..."}`;
-        
-        try {
-            const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
-                body: JSON.stringify({ 
-                    model: "llama-3.3-70b-versatile", 
-                    messages: [{ role: "user", content: prompt }],
-                    temperature: 0
-                })
-            });
-            const data = await res.json();
-            if(data.error) throw new Error(data.error.message);
-            
-            let aiText = data.choices[0].message.content.toUpperCase();
-            // Clean up potential markdown formatting
-            aiText = aiText.replace(/```json/g, "").replace(/```/g, "").trim();
-            
-            const parsed = JSON.parse(aiText);
-            const letter = parsed.answer.match(/[A-D]/)[0];
-            const ansIndex = letter.charCodeAt(0) - 65;
-            const explanation = parsed.explanation || "Explanation generated by AI.";
-            
-            await db.collection("questions").doc(q.id).update({ 
-                answer: ansIndex,
-                explanation: explanation
-            });
-            successCount++;
-            
-        } catch(e) {
-            console.error("AI failed for Q:", q.question, e);
-        }
-        await new Promise(r => setTimeout(r, 500));
-    }
-    
-    $("aiProgress").textContent = `✅ Finished! Successfully generated ${successCount} answers & explanations out of ${missing.length}.`;
-    $("autoGenerateBtn").disabled = false;
-    $("autoGenerateBtn").textContent = "✨ Auto-Generate Missing Answers & Explanations";
+
+              const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+                  body: JSON.stringify({ 
+                      model: "llama-3.3-70b-versatile", 
+                      messages: [{ role: "user", content: prompt }],
+                      temperature: 0
+                  })
+              });
+              const data = await res.json();
+              if(data.error) throw new Error(data.error.message);
+              
+              let aiText = data.choices[0].message.content.toUpperCase();
+              aiText = aiText.replace(/```json/g, "").replace(/```/g, "").trim();
+              
+              const parsed = JSON.parse(aiText);
+              const letter = parsed.answer.match(/[A-D]/)[0];
+              const ansIndex = letter.charCodeAt(0) - 65;
+              const explanation = parsed.explanation || "Explanation generated by AI.";
+              
+              // Update local memory
+              q.answer = ansIndex;
+              q.explanation = explanation;
+              
+              // Update Database in background so future students get it instantly
+              db.collection("questions").doc(q.id).update({ 
+                  answer: ansIndex,
+                  explanation: explanation
+              }).catch(e => console.log("DB update failed:", e));
+              
+          } catch(e) {
+              $("quizMessage").innerHTML = `<span style="color:#ff6577">❌ AI Error: ${e.message}</span>`;
+              for(let x=0; x<4; x++) { const el = $("opt-"+x); if(el) el.querySelector("input").disabled = false; }
+              return;
+          }
+      }
+      
+      showFeedback(); 
+  } 
 };
 /* ================================================= */
 
@@ -429,6 +407,31 @@ window.deleteResult = function(id) {
 };
 
 $("refreshResultsBtn").onclick = loadStudentResults;
+
+$("saveQuestionBtn").onclick = function() {
+  const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
+  if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
+  $("addMessage").textContent = "Saving...";
+  db.collection("questions").add({
+    question: q, options: opts, answer: Number($("correct").value), explanation: "",
+    subject: normalizeSubject($("addSubject").value), setName: normalizeSet($("addSet").value), topic: normalizeTopic($("addTopic").value)
+  }).then(() => {
+    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); 
+    $("addMessage").textContent = "Saved!";
+  });
+};
+
+$("continueBtn").onclick = login;
+$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
+$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
+$("importBtn").onclick = () => showPage("importPage");
+$("keyBtn").onclick = () => showPage("keyPage");
+
+$("adminBtn").onclick = () => {
+    const pin = prompt("Enter Teacher PIN:");
+    if (pin === "1234") showPage("adminPage");
+    else if (pin !== null) alert("Incorrect PIN.");
+};
 
 $("applyKeyBtn").onclick = function() {
     const setName = normalizeSet($("keySetName").value);
@@ -497,8 +500,6 @@ function startQuiz(type) {
 $("examBtn").onclick = () => startQuiz("exam");
 $("practiceBtn").onclick = () => startQuiz("practice");
 
-window.selAns = (j) => { answers[index] = j; if(mode === "practice") showFeedback(); };
-
 function renderQ(){
   const q = quiz[index];
   $("position").textContent = `Question ${index+1} of ${quiz.length}`;
@@ -509,7 +510,12 @@ function renderQ(){
   });
   $("quizContent").innerHTML = html;
   $("nextBtn").textContent = index === quiz.length - 1 ? "Finish" : "Next Question →";
-  if(mode === "practice" && answers[index] !== null) showFeedback();
+  
+  // If they already answered it (e.g. navigating back), show feedback
+  if(mode === "practice" && answers[index] !== null) {
+      // If they answered it but it still doesn't have an answer, they need to click again or wait
+      if (quiz[index].answer !== null) showFeedback();
+  }
 }
 
 function showFeedback(){
@@ -523,7 +529,7 @@ function showFeedback(){
   
   let msg = "";
   if (q.answer === null || q.answer === undefined) {
-      msg = "No answer key available for this question.";
+      msg = "No answer key available.";
   } else if (answers[index] === q.answer) {
       msg = "✅ Correct!";
   } else {
