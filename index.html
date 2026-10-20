@@ -187,6 +187,7 @@ window.addEventListener("error", function(event) {
 <div id="aiLoading" class="loading-msg hidden">🤖 AI is grading, please wait...</div>
 <button id="nextBtn">Next Question →</button>
 <button id="submitBtn" class="danger hidden">Submit Examination</button>
+<button id="quitBtn" class="secondary" style="margin-top:10px;">🚪 Quit / Back to Menu</button>
 </section>
 
 <section id="resultPage" class="card hidden">
@@ -251,7 +252,7 @@ function saveQuestions(){
 function updateCount(){ $("count").textContent = questions.length; }
 
 function showPage(id){
-  if(mode === "exam" && !$("quizPage").classList.contains("hidden") && id !== "quizPage" && id !== "resultPage"){
+  if(mode === "exam" && !$("quizPage").classList.contains("hidden") && id !== "quizPage" && id !== "resultPage" && id !== "menuPage"){
     $("quizMessage").textContent = "Finish the examination before leaving.";
     return;
   }
@@ -295,21 +296,37 @@ function addQuestion(){
   }
 }
 
+/* --- IMPROVED AI HELPER FUNCTION --- */
 async function getAIAnswerForSingle(q, key) {
-  const prompt = "You are an exam grader. For the following multiple-choice question, determine the correct answer. Return ONLY a single uppercase letter: A, B, C, or D. Do not include any other text.\nQuestion: " + q.question + "\nA) " + q.options[0] + "\nB) " + q.options[1] + "\nC) " + q.options[2] + "\nD) " + q.options[3];
+  const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
+Question: ${q.question}
+A) ${q.options[0]}
+B) ${q.options[1]}
+C) ${q.options[2]}
+D) ${q.options[3]}
+
+Return a JSON object with exactly one key "answer" and a value of "A", "B", "C", or "D".`;
   
   const res = await fetch(GEMINI_URL + key, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+    body: JSON.stringify({ 
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseMimeType: "application/json" }
+    })
   });
   
   const data = await res.json();
   if(data.error) throw new Error(data.error.message);
   
-  const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
-  const match = aiText.match(/[A-D]/);
-  if(match) return match[0].charCodeAt(0) - 65;
+  // Parse the clean JSON response
+  const aiText = data.candidates[0].content.parts[0].text.trim();
+  const parsed = JSON.parse(aiText);
+  const answerLetter = parsed.answer.toUpperCase();
+  
+  if(["A","B","C","D"].includes(answerLetter)) {
+    return answerLetter.charCodeAt(0) - 65; // Returns 0, 1, 2, or 3
+  }
   return null;
 }
 
@@ -566,6 +583,7 @@ function startQuiz(which){
   index = 0; locked = false;
   $("quizHeading").textContent = which === "exam" ? "Examination" : "Practice";
   $("submitBtn").classList.toggle("hidden",which !== "exam");
+  $("quitBtn").classList.remove("hidden"); // Show quit button
   $("quizMessage").textContent = "";
   $("aiLoading").classList.add("hidden");
 
@@ -608,7 +626,14 @@ function renderQuestion(){
            $("aiLoading").classList.remove("hidden");
            const key = localStorage.getItem(API_KEY);
            if(key) {
-             try { q.answer = await getAIAnswerForSingle(q, key); } catch(e) { console.warn(e); }
+             try { 
+                 const aiAns = await getAIAnswerForSingle(q, key);
+                 if(aiAns !== null) q.answer = aiAns;
+             } catch(e) { 
+                 $("quizMessage").textContent = "AI Error: " + e.message; 
+             }
+           } else {
+               $("quizMessage").textContent = "No API key saved. Cannot use AI.";
            }
            $("aiLoading").classList.add("hidden");
         }
@@ -630,7 +655,7 @@ function showFeedback(){
     if(q.answer !== null && j === q.answer) label.style.border = "2px solid #19d3c5";
     if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
   });
-  if(q.answer === null) $("quizMessage").textContent = "Saved. (No answer key, AI could not grade).";
+  if(q.answer === null) $("quizMessage").textContent = $("quizMessage").textContent || "Saved. (No answer key, AI could not grade).";
   else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : "Incorrect. Answer: " + String.fromCharCode(65+q.answer);
 }
 
@@ -653,6 +678,7 @@ async function finish(expired){
       $("aiLoading").textContent = "🤖 AI is grading " + ungradedIndices.length + " questions...";
       $("submitBtn").disabled = true;
       $("nextBtn").disabled = true;
+      $("quitBtn").disabled = true;
 
       for(let i of ungradedIndices) {
           try {
@@ -664,6 +690,7 @@ async function finish(expired){
       }
       $("submitBtn").disabled = false;
       $("nextBtn").disabled = false;
+      $("quitBtn").disabled = false;
   }
 
   let score = 0, gradable = 0;
@@ -745,6 +772,14 @@ $("nextBtn").onclick = nextQuestion;
 $("submitBtn").onclick = function() { finish(false); };
 $("menuResultBtn").onclick = function() { showPage("menuPage"); };
 document.querySelectorAll(".backBtn").forEach(function(b) { b.onclick = function() { showPage("menuPage"); }; });
+
+/* --- QUIT BUTTON LOGIC --- */
+$("quitBtn").onclick = function() {
+    if(mode === "exam" && !confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
+    if(timerId) clearInterval(timerId);
+    mode = "";
+    showPage("menuPage");
+};
 
 updateCount(); refreshTopicSuggestions(); refreshDropdowns();
 })();
