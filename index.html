@@ -125,9 +125,9 @@ window.addEventListener("error", function(event) {
 <label for="d">Option D</label><input id="d" placeholder="Option D">
 
 <div class="info">
-  <strong>🤖 AI Auto-Answer</strong>
-  <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
-  <input id="apiKey" type="password" placeholder="Paste Gemini API Key here">
+  <strong>🤖 AI Auto-Answer (Free via Groq)</strong>
+  <p class="small">Get a free API key from <a href="https://console.groq.com/keys" target="_blank">Groq Console</a>.</p>
+  <input id="apiKey" type="password" placeholder="Paste Groq API Key here (gsk_...)">
   <button id="aiAnswerBtn" class="secondary" type="button">Ask AI for Correct Answer</button>
 </div>
 
@@ -221,14 +221,7 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
-const API_KEY = "smartExamGeminiKey";
-
-// FALLBACK MODELS (If one is busy, try the next)
-const AI_MODELS = [
-  "gemini-2.0-flash",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-8b"
-];
+const API_KEY = "smartExamGroqKey"; // Updated Key Name
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -302,6 +295,7 @@ function addQuestion(){
   }
 }
 
+/* --- GROQ AI INTEGRATION --- */
 async function getAIAnswerForSingle(q, key) {
   const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
 Question: ${q.question}
@@ -312,49 +306,36 @@ D) ${q.options[3]}
 
 Return a JSON object with exactly one key "answer" and a value of "A", "B", "C", or "D".`;
 
-  let lastError = "All AI models are currently busy. Please try again in a minute.";
-
-  // Try each model one by one until one works
-  for (const model of AI_MODELS) {
-    try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-      
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { responseMimeType: "application/json" }
-        })
-      });
-      
-      const data = await res.json();
-      if(data.error) throw new Error(data.error.message);
-      
-      const aiText = data.candidates[0].content.parts[0].text.trim();
-      const parsed = JSON.parse(aiText);
-      const answerLetter = parsed.answer.toUpperCase();
-      
-      if(["A","B","C","D"].includes(answerLetter)) {
-        return answerLetter.charCodeAt(0) - 65; 
-      }
-    } catch (err) {
-      console.warn(`Model ${model} failed:`, err.message);
-      lastError = err.message;
-      // If the API key is invalid, stop immediately (no point trying other models)
-      if (err.message.includes("API key not valid") || err.message.includes("API_KEY_INVALID")) {
-        throw new Error("Invalid API Key. Please check your Google AI Studio key.");
-      }
-      // Otherwise, the loop continues to the next model automatically
-    }
-  }
+  // Groq uses the OpenAI API format
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer ' + key
+    },
+    body: JSON.stringify({ 
+      model: "llama-3.1-8b-instant", // Fast and smart free model
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" }
+    })
+  });
   
-  throw new Error(lastError);
+  const data = await res.json();
+  if(data.error) throw new Error(data.error.message);
+  
+  const aiText = data.choices[0].message.content.trim();
+  const parsed = JSON.parse(aiText);
+  const answerLetter = parsed.answer.toUpperCase();
+  
+  if(["A","B","C","D"].includes(answerLetter)) {
+    return answerLetter.charCodeAt(0) - 65; 
+  }
+  return null;
 }
 
 async function getAIAnswer() {
   const key = $("apiKey").value.trim();
-  if(!key) { alert("Please enter your Gemini API key first."); return; }
+  if(!key) { alert("Please enter your Groq API key first."); return; }
   localStorage.setItem(API_KEY, key);
 
   const q = $("qText").value.trim();
