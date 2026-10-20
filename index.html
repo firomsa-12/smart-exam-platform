@@ -22,7 +22,7 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 .hidden{display:none!important}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .info{background:#192b48;padding:12px;border-radius:8px;margin:12px 0;line-height:1.5}
-.option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0}
+.option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0; cursor:pointer;}
 .option input{width:auto}
 .small{color:#b9c9df;font-size:13px;line-height:1.5}
 .timer{text-align:center;color:#19d3c5;font-size:24px;font-weight:bold;margin:15px}
@@ -30,8 +30,6 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-.subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
-.set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
 </style>
 </head>
 <body>
@@ -54,13 +52,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <h2>Student Dashboard</h2>
 <p id="welcome"></p>
 <div class="info">Total Questions available: <strong id="count">0</strong></div>
-
-<label for="quizSubject">Subject</label>
-<select id="quizSubject">
-<option value="All">All subjects</option>
-<option>Physics</option><option>Chemistry</option><option>Biology</option>
-<option>Mathematics</option><option>English</option><option>General</option>
-</select>
 
 <label for="quizSet">Exam Set (Document)</label>
 <select id="quizSet"><option value="All">All Sets</option></select>
@@ -100,8 +91,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <div class="info">
   <strong>🤖 Need the answer?</strong>
-  <p class="small">Open normal ChatGPT to find the correct answer.</p>
-  <button id="openChatGPTBtn" type="button" style="background:#10a37f; color:white;">Open ChatGPT</button>
+  <p class="small">Open normal ChatGPT to find the correct answer automatically.</p>
+  <button id="openChatGPTBtn" type="button" style="background:#10a37f; color:white;">Open ChatGPT to get Answer</button>
 </div>
 
 <label>Correct answer</label>
@@ -154,8 +145,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <section id="resultPage" class="card hidden">
 <h2>Results</h2>
 <div id="resultStudent" class="info"></div>
-<h1 id="score" style="text-align:center"></h1>
-<p id="percentage" style="text-align:center"></p>
+<h1 id="score" style="text-align:center; font-size: 28px; color: #19d3c5;"></h1>
+<p id="percentage" style="text-align:center; font-size: 20px; margin-bottom: 20px;"></p>
 <div id="review"></div>
 <button id="menuResultBtn">Return to Menu</button>
 </section>
@@ -166,7 +157,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 "use strict";
 const $ = id => document.getElementById(id);
 const pages = ["loginPage","menuPage","addPage","importPage","bankPage","quizPage","resultPage"];
-let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null, locked = false;
+let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
 const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
@@ -182,17 +173,20 @@ try{
 }catch(e){}
 
 function saveQuestions(){
-  localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions));
-  $("count").textContent = questions.length;
+  try { localStorage.setItem(QUESTIONS_KEY,JSON.stringify(questions)); updateCount(); } 
+  catch(e) { alert("Storage full."); }
 }
+function updateCount(){ $("count").textContent = questions.length; }
 
 function showPage(id){
-  if(mode === "exam" && !$("quizPage").classList.contains("hidden") && id !== "quizPage" && id !== "resultPage" && id !== "menuPage"){
-    $("quizMessage").textContent = "Finish the examination before leaving."; return;
+  if(mode === "exam" && id !== "quizPage" && id !== "resultPage"){
+    if(!confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
+    if(timerId) clearInterval(timerId);
+    mode = "";
   }
   pages.forEach(p => $(p).classList.add("hidden"));
   $(id).classList.remove("hidden");
-  $("count").textContent = questions.length;
+  updateCount();
 }
 
 function login(){
@@ -201,15 +195,14 @@ function login(){
   student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
 }
 
-/* THE NEW CHATGPT BUTTON LOGIC */
+/* CHATGPT BUTTON LOGIC */
 $("openChatGPTBtn").onclick = function() {
     const q = $("qText").value.trim();
     const a = $("a").value.trim(), b = $("b").value.trim(), c = $("c").value.trim(), d = $("d").value.trim();
     if(!q || !a || !b || !c || !d) { alert("Please fill out the question and all 4 options first."); return; }
     
     const prompt = `What is the correct answer to this multiple-choice question? Reply with ONLY the letter (A, B, C, or D).\n\nQuestion: ${q}\nA) ${a}\nB) ${b}\nC) ${c}\nD) ${d}`;
-    const encodedPrompt = encodeURIComponent(prompt);
-    window.open("https://chatgpt.com/?q=" + encodedPrompt, "_blank");
+    window.open("https://chatgpt.com/?q=" + encodeURIComponent(prompt), "_blank");
 };
 
 $("saveQuestionBtn").onclick = function() {
@@ -234,32 +227,104 @@ $("bankBtn").onclick = () => {
   showPage("bankPage");
 };
 
-$("examBtn").onclick = () => {
-  let aq = questions.sort(() => Math.random() - 0.5);
+/* QUIZ ENGINE */
+function startQuiz(type) {
+  let aq = [...questions].sort(() => Math.random() - 0.5);
   const limit = parseInt($("examLimit").value);
-  if(limit > 0) aq = aq.slice(0, limit);
+  if(limit > 0 && limit < aq.length) aq = aq.slice(0, limit);
   if(!aq.length) { alert("No questions available."); return; }
-  mode = "exam"; quiz = aq.map(q=>({...q})); answers = new Array(quiz.length).fill(null); index = 0;
-  $("submitBtn").classList.remove("hidden"); $("quitBtn").classList.remove("hidden"); showPage("quizPage"); renderQ();
+
+  mode = type; quiz = aq; answers = new Array(quiz.length).fill(null); index = 0;
+  $("quizHeading").textContent = type === "exam" ? "Examination in Progress" : "Practice Mode";
+  $("submitBtn").classList.toggle("hidden", type !== "exam");
+  
+  if(type === "exam"){
+    seconds = minutes * 60;
+    $("timer").textContent = `Time Left: ${minutes}m`;
+    if(timerId) clearInterval(timerId);
+    timerId = setInterval(() => { seconds--; $("timer").textContent = `Time Left: ${Math.floor(seconds/60)}m ${seconds%60}s`; if(seconds <= 0) finishQuiz(); }, 1000);
+  } else {
+    $("timer").textContent = "Practice Mode (No Timer)";
+    if(timerId) clearInterval(timerId);
+  }
+  showPage("quizPage"); renderQ();
+}
+
+$("examBtn").onclick = () => startQuiz("exam");
+$("practiceBtn").onclick = () => startQuiz("practice");
+
+window.selAns = (j) => { 
+  answers[index] = j; 
+  if(mode === "practice") { showFeedback(); }
 };
 
 function renderQ(){
   const q = quiz[index];
   $("position").textContent = `Question ${index+1} of ${quiz.length}`;
-  $("quizContent").innerHTML = `<h3>${q.question}</h3>` + q.options.map((o,j)=>`<label class="option"><input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''}><span>${String.fromCharCode(65+j)}. ${o}</span></label>`).join("");
+  $("quizMessage").textContent = "";
+  
+  let html = `<h3>${q.question}</h3>`;
+  q.options.forEach((o,j) => {
+    html += `<label class="option" id="opt-${j}">
+      <input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}>
+      <span>${String.fromCharCode(65+j)}. ${o}</span>
+    </label>`;
+  });
+  $("quizContent").innerHTML = html;
+  
+  $("nextBtn").textContent = index === quiz.length - 1 ? "Finish" : "Next Question →";
+  
+  if(mode === "practice" && answers[index] !== null) showFeedback();
 }
-window.selAns = (j) => { answers[index] = j; };
 
-$("nextBtn").onclick = () => { if(index < quiz.length-1){ index++; renderQ(); } else { $("submitBtn").click(); } };
-$("submitBtn").onclick = () => {
-  let score = 0; quiz.forEach((q,i) => { if(answers[i] === q.answer) score++; });
-  $("resultStudent").textContent = `Student: ${student.name}`; $("score").textContent = `${score} / ${quiz.length}`;
-  mode = ""; showPage("resultPage");
+function showFeedback(){
+  const q = quiz[index];
+  for(let j=0; j<4; j++) {
+    const el = $("opt-"+j);
+    if(!el) continue;
+    el.querySelector("input").disabled = true;
+    if(j === q.answer) el.style.border = "2px solid #19d3c5";
+    if(j === answers[index] && j !== q.answer) el.style.border = "2px solid #ff6577";
+  }
+  $("quizMessage").textContent = answers[index] === q.answer ? "✅ Correct!" : `❌ Incorrect. Correct answer: ${String.fromCharCode(65+q.answer)}`;
+}
+
+$("nextBtn").onclick = () => { 
+  if(mode === "practice" && answers[index] === null) { $("quizMessage").textContent = "Please select an answer first."; return; }
+  if(index < quiz.length-1){ index++; renderQ(); } 
+  else { finishQuiz(); } 
 };
-$("quitBtn").onclick = () => { mode = ""; showPage("menuPage"); };
+
+$("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
+
+function finishQuiz(){
+  if(timerId) clearInterval(timerId);
+  let score = 0;
+  quiz.forEach((q,i) => { if(answers[i] === q.answer) score++; });
+  
+  const percent = Math.round((score / quiz.length) * 100);
+  
+  $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
+  $("score").textContent = `Score: ${score} / ${quiz.length}`;
+  $("percentage").textContent = `Percentage: ${percent}%`;
+  
+  let reviewHtml = "";
+  quiz.forEach((q,i) => {
+    reviewHtml += `<div class="question">
+      <p><strong>Q${i+1}: ${q.question}</strong></p>
+      <p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p>
+      <p class="small" style="color:#19d3c5;">Correct answer: ${String.fromCharCode(65+q.answer)}</p>
+    </div>`;
+  });
+  $("review").innerHTML = reviewHtml;
+  
+  mode = ""; showPage("resultPage");
+}
+
+$("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
 $("menuResultBtn").onclick = () => showPage("menuPage");
 document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
-$("count").textContent = questions.length;
+updateCount();
 })();
 </script>
 </body>
