@@ -39,9 +39,20 @@ a{color:#19d3c5;overflow-wrap:anywhere}a:hover{color:#ffffff}
 <body>
 <div class="container">
 
-<div id="appError" class="card" style="display:none;border:2px solid #ff6577"><h2 style="color:#ff6577">A problem occurred</h2><pre id="appErrorText"></pre></div>
+<div id="appError" class="card" style="display:none;border:2px solid #ff6577">
+  <h2 style="color:#ff6577">App Error</h2>
+  <pre id="appErrorText"></pre>
+</div>
+
 <script>
-window.addEventListener("error",function(event){var box=document.getElementById("appError"),text=document.getElementById("appErrorText");if(box&&text){box.style.display="block";text.textContent=(event.message||"Unknown JavaScript error")}});
+window.addEventListener("error", function(event) {
+  var box = document.getElementById("appError");
+  var text = document.getElementById("appErrorText");
+  if (box && text) {
+    box.style.display = "block";
+    text.textContent = event.message || "Unknown error";
+  }
+});
 </script>
 
 <header>
@@ -115,7 +126,7 @@ window.addEventListener("error",function(event){var box=document.getElementById(
 
 <div class="info">
   <strong>🤖 AI Auto-Answer</strong>
-  <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>. Saved only on your phone.</p>
+  <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
   <input id="apiKey" type="password" placeholder="Paste Gemini API Key here">
   <button id="aiAnswerBtn" class="secondary" type="button">Ask AI for Correct Answer</button>
 </div>
@@ -228,7 +239,7 @@ try{
   if(savedMinutes >= 1 && savedMinutes <= 600) minutes = savedMinutes;
   const savedKey = localStorage.getItem(API_KEY);
   if(savedKey) $("apiKey").value = savedKey;
-}catch(e){ console.warn(e); }
+}catch(e){ console.warn("Storage error", e); }
 
 function saveQuestions(){
   try{
@@ -284,9 +295,8 @@ function addQuestion(){
   }
 }
 
-/* --- AI HELPER FUNCTION --- */
 async function getAIAnswerForSingle(q, key) {
-  const prompt = `You are an exam grader. For the following multiple-choice question, determine the correct answer. Return ONLY a single uppercase letter: A, B, C, or D. Do not include any other text.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
+  const prompt = "You are an exam grader. For the following multiple-choice question, determine the correct answer. Return ONLY a single uppercase letter: A, B, C, or D. Do not include any other text.\nQuestion: " + q.question + "\nA) " + q.options[0] + "\nB) " + q.options[1] + "\nC) " + q.options[2] + "\nD) " + q.options[3];
   
   const res = await fetch(GEMINI_URL + key, {
     method: 'POST',
@@ -299,7 +309,7 @@ async function getAIAnswerForSingle(q, key) {
   
   const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
   const match = aiText.match(/[A-D]/);
-  if(match) return match[0].charCodeAt(0) - 65; // returns 0-3
+  if(match) return match[0].charCodeAt(0) - 65;
   return null;
 }
 
@@ -320,9 +330,9 @@ async function getAIAnswer() {
     if(ansIndex !== null) {
       const letter = String.fromCharCode(65 + ansIndex);
       $("correct").value = ansIndex;
-      $("addMessage").textContent = `✅ AI found the answer: Option ${letter}`;
+      $("addMessage").textContent = "✅ AI found the answer: Option " + letter;
     } else {
-      $("addMessage").textContent = `❌ AI could not determine a clear answer.`;
+      $("addMessage").textContent = "❌ AI could not determine a clear answer.";
     }
   } catch (err) {
     $("addMessage").textContent = "❌ AI Error: " + err.message;
@@ -377,7 +387,7 @@ function importText(){
     const setName = $("importSetName").value.trim() || "Pasted JSON Set";
     const data = parseQuestionJSON($("jsonText").value);
     const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
-    $("importMessage").textContent = `Saved ${res.addedCount} questions to "${setName}". Skipped ${res.skippedCount} duplicates.`;
+    $("importMessage").textContent = "Saved " + res.addedCount + " questions to \"" + setName + "\". Skipped " + res.skippedCount + " duplicates.";
     $("jsonText").value = "";
   }catch(e){ $("importMessage").textContent = "Error: " + e.message; }
 }
@@ -469,7 +479,7 @@ async function importFile(){
     }
     
     const res = processImported(data, $("importSubject").value, $("importTopic").value, setName);
-    $("importMessage").textContent = `Saved ${res.addedCount} questions to "${setName}". Skipped ${res.skippedCount} duplicates.`;
+    $("importMessage").textContent = "Saved " + res.addedCount + " questions to \"" + setName + "\". Skipped " + res.skippedCount + " duplicates.";
     $("jsonFile").value = "";
     $("selectedFile").textContent = "No file selected.";
   } catch(e) {
@@ -503,15 +513,15 @@ function showBank(){
     sets.forEach(setName => {
       const setH = document.createElement("div");
       setH.className = "set-header";
-      setH.textContent = `📁 ${setName} (${grouped[sub][setName].length})`;
+      setH.textContent = "📁 " + setName + " (" + grouped[sub][setName].length + ")";
       box.appendChild(setH);
 
       grouped[sub][setName].forEach((q) => {
         const card = document.createElement("div");
         card.className = "question";
-        card.innerHTML = `<h3>${q.question}</h3>`;
-        q.options.forEach((o,j) => card.innerHTML += `<p>${String.fromCharCode(65+j)}. ${o}</p>`);
-        card.innerHTML += `<p class="small">Answer: ${q.answer===null?'AI will grade':String.fromCharCode(65+q.answer)}</p>`;
+        card.innerHTML = "<h3>" + q.question + "</h3>";
+        q.options.forEach((o,j) => card.innerHTML += "<p>" + String.fromCharCode(65+j) + ". " + o + "</p>");
+        card.innerHTML += "<p class='small'>Answer: " + (q.answer===null ? 'AI will grade' : String.fromCharCode(65+q.answer)) + "</p>";
         
         const del = document.createElement("button");
         del.textContent = "Delete"; del.className = "danger";
@@ -543,7 +553,7 @@ function startQuiz(which){
     availableQuestions = availableQuestions.slice(0, limit);
   }
 
-  if(which === "exam" && !confirm(`Start timed exam with ${availableQuestions.length} questions?`)) return;
+  if(which === "exam" && !confirm("Start timed exam with " + availableQuestions.length + " questions?")) return;
   if(timerId) clearInterval(timerId);
 
   mode = which;
@@ -578,9 +588,9 @@ function updateTimer(){
 function renderQuestion(){
   locked = false;
   const q = quiz[index];
-  $("position").textContent = `Question ${index+1} of ${quiz.length}`;
+  $("position").textContent = "Question " + (index+1) + " of " + quiz.length;
   const box = $("quizContent"); box.replaceChildren();
-  box.innerHTML = `<p class="small">${q.subject} → ${q.topic}</p><h3>${q.question}</h3>`;
+  box.innerHTML = "<p class='small'>" + q.subject + " → " + q.topic + "</p><h3>" + q.question + "</h3>";
 
   q.options.forEach((option,j) => {
     const label = document.createElement("label");
@@ -588,8 +598,7 @@ function renderQuestion(){
     const radio = document.createElement("input");
     radio.type = "radio"; radio.name = "choice"; radio.checked = answers[index] === j;
     
-    // ASYNC Practice Mode Event
-    radio.onchange = async () => { 
+    radio.onchange = async function() { 
       if(locked) return; 
       answers[index] = j; 
       if(mode === "practice"){ 
@@ -606,7 +615,7 @@ function renderQuestion(){
         showFeedback(); 
       } 
     };
-    label.append(radio, document.createTextNode(`${String.fromCharCode(65+j)}. ${option}`));
+    label.append(radio, document.createTextNode(String.fromCharCode(65+j) + ". " + option));
     box.appendChild(label);
   });
 
@@ -622,7 +631,7 @@ function showFeedback(){
     if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
   });
   if(q.answer === null) $("quizMessage").textContent = "Saved. (No answer key, AI could not grade).";
-  else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : `Incorrect. Answer: ${String.fromCharCode(65+q.answer)}`;
+  else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : "Incorrect. Answer: " + String.fromCharCode(65+q.answer);
 }
 
 function nextQuestion(){
@@ -632,28 +641,25 @@ function nextQuestion(){
   else finish(false);
 }
 
-/* ASYNC finish FOR AI BATCH GRADING */
 async function finish(expired){
   if(timerId) clearInterval(timerId);
   
-  // AI BATCH GRADING FALLBACK
   const key = localStorage.getItem(API_KEY);
   const ungradedIndices = quiz.map((q, i) => q.answer === null ? i : -1).filter(i => i !== -1);
   
   if(ungradedIndices.length > 0 && key) {
       $("quizMessage").textContent = "";
       $("aiLoading").classList.remove("hidden");
-      $("aiLoading").textContent = `🤖 AI is grading ${ungradedIndices.length} questions...`;
+      $("aiLoading").textContent = "🤖 AI is grading " + ungradedIndices.length + " questions...";
       $("submitBtn").disabled = true;
       $("nextBtn").disabled = true;
 
-      // Grade questions one by one to ensure accuracy
       for(let i of ungradedIndices) {
           try {
               const aiAns = await getAIAnswerForSingle(quiz[i], key);
               if(aiAns !== null) quiz[i].answer = aiAns;
           } catch(e) {
-              console.warn("Failed AI grading for index", i, e);
+              console.warn("Failed AI grading", e);
           }
       }
       $("submitBtn").disabled = false;
@@ -663,16 +669,16 @@ async function finish(expired){
   let score = 0, gradable = 0;
   quiz.forEach((q,i) => { if(q.answer !== null){ gradable++; if(answers[i] === q.answer) score++; } });
 
-  $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
-  $("score").textContent = gradable ? `${score} / ${gradable}` : "No answer key available";
-  $("percentage").textContent = gradable ? `${Math.round(score/gradable*100)}% ${expired ? '(Time Expired)' : ''}` : "Ungraded questions";
+  $("resultStudent").textContent = "Student: " + student.name + " · School: " + student.school;
+  $("score").textContent = gradable ? score + " / " + gradable : "No answer key available";
+  $("percentage").textContent = gradable ? Math.round(score/gradable*100) + "% " + (expired ? '(Time Expired)' : '') : "Ungraded questions";
 
   const review = $("review"); review.replaceChildren();
   quiz.forEach((q,i) => {
     const card = document.createElement("div"); card.className = "question";
-    card.innerHTML = `<h3>${i+1}. ${q.question}</h3>
-      <p>Your answer: ${answers[i]===null?'None':String.fromCharCode(65+answers[i])}</p>
-      <p class="small">Correct: ${q.answer===null?'None':String.fromCharCode(65+q.answer)}</p>`;
+    card.innerHTML = "<h3>" + (i+1) + ". " + q.question + "</h3>" +
+      "<p>Your answer: " + (answers[i]===null?'None':String.fromCharCode(65+answers[i])) + "</p>" +
+      "<p class='small'>Correct: " + (q.answer===null?'None':String.fromCharCode(65+q.answer)) + "</p>";
     review.appendChild(card);
   });
   mode = ""; 
@@ -727,18 +733,18 @@ $("saveDurationBtn").onclick = saveDuration;
 $("saveQuestionBtn").onclick = addQuestion;
 $("aiAnswerBtn").onclick = getAIAnswer;
 $("importTextBtn").onclick = importText;
-$("chooseFileBtn").onclick = () => $("jsonFile").click();
+$("chooseFileBtn").onclick = function() { $("jsonFile").click(); };
 $("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
 $("importFileBtn").onclick = importFile;
-$("examBtn").onclick = () => startQuiz("exam");
-$("practiceBtn").onclick = () => startQuiz("practice");
-$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
-$("importBtn").onclick = () => showPage("importPage");
+$("examBtn").onclick = function() { startQuiz("exam"); };
+$("practiceBtn").onclick = function() { startQuiz("practice"); };
+$("addBtn").onclick = function() { $("duration").value = minutes; showPage("addPage"); };
+$("importBtn").onclick = function() { showPage("importPage"); };
 $("bankBtn").onclick = showBank;
 $("nextBtn").onclick = nextQuestion;
-$("submitBtn").onclick = () => finish(false);
-$("menuResultBtn").onclick = () => showPage("menuPage");
-document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
+$("submitBtn").onclick = function() { finish(false); };
+$("menuResultBtn").onclick = function() { showPage("menuPage"); };
+document.querySelectorAll(".backBtn").forEach(function(b) { b.onclick = function() { showPage("menuPage"); }; });
 
 updateCount(); refreshTopicSuggestions(); refreshDropdowns();
 })();
