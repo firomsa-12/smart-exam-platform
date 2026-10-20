@@ -41,6 +41,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 .result-card.fail { border-left-color: #ff6577; }
 .result-card.pass { border-left-color: #ff9800; }
 .result-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; color: #fff; }
+.explanation-box { background: #1d3557; padding: 10px; border-radius: 6px; margin-top: 10px; border-left: 4px solid #19d3c5; font-style: italic; color: #e0f2fe; }
 </style>
 </head>
 <body>
@@ -175,19 +176,17 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
-<!-- TEACHER DASHBOARD WITH AI -->
 <section id="adminPage" class="card hidden">
 <h2>📊 Teacher Dashboard</h2>
 
-<!-- NEW AI BOX -->
 <div class="info" style="border: 1px solid #19d3c5;">
     <h3 style="margin-top: 0; color: #19d3c5;">🤖 AI Auto-Grader</h3>
     <p class="small">Paste your free Groq API Key here. Get one at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>. Saved locally on this device.</p>
     <input id="groqApiKey" type="password" placeholder="Paste Groq API Key (gsk_...)">
     <button id="saveAiKeyBtn" class="secondary" type="button">Save Key</button>
     
-    <p class="small" style="margin-top: 15px;">Click below to automatically find answers for all questions that are currently missing an answer.</p>
-    <button id="autoGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers</button>
+    <p class="small" style="margin-top: 15px;">Click below to automatically find answers AND generate explanations for all questions missing an answer.</p>
+    <button id="autoGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers & Explanations</button>
     <p id="aiProgress" class="small" style="color: #19d3c5; font-weight: bold;"></p>
 </div>
 
@@ -204,7 +203,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <div id="timer" class="timer"></div>
 <p id="position" class="small"></p>
 <div id="quizContent"></div>
-<p id="quizMessage" class="small"></p>
+<div id="quizMessage" class="small"></div>
 <button id="nextBtn">Next Question →</button>
 <button id="submitBtn" class="danger hidden">Submit Examination</button>
 <button id="quitBtn" class="secondary" style="margin-top:10px;">🚪 Quit / Back to Menu</button>
@@ -307,7 +306,7 @@ $("saveQuestionBtn").onclick = function() {
   
   $("addMessage").textContent = "Saving...";
   db.collection("questions").add({
-    question: q, options: opts, answer: Number($("correct").value), 
+    question: q, options: opts, answer: Number($("correct").value), explanation: "",
     subject: normalizeSubject($("addSubject").value), setName: normalizeSet($("addSet").value), topic: normalizeTopic($("addTopic").value)
   }).then(() => {
     $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); 
@@ -327,7 +326,7 @@ $("adminBtn").onclick = () => {
     else if (pin !== null) alert("Incorrect PIN.");
 };
 
-/* ================= AI AUTO-GRADER ================= */
+/* ================= AI AUTO-GRADER & EXPLANATIONS ================= */
 $("saveAiKeyBtn").onclick = function() {
     const key = $("groqApiKey").value.trim();
     if(!key.startsWith("gsk_")) { alert("This doesn't look like a Groq key. It should start with 'gsk_'."); return; }
@@ -339,8 +338,7 @@ $("autoGenerateBtn").onclick = async function() {
     const key = localStorage.getItem(AI_KEY_STORAGE);
     if(!key) { alert("Please paste and save your Groq API Key first."); return; }
     
-    // Find questions with no answer
-    const missing = questions.filter(q => q.answer === null);
+    const missing = questions.filter(q => q.answer === null || q.answer === undefined);
     if(missing.length === 0) { $("aiProgress").textContent = "All questions already have answers!"; return; }
     
     $("autoGenerateBtn").disabled = true;
@@ -349,9 +347,16 @@ $("autoGenerateBtn").onclick = async function() {
     
     for(let i = 0; i < missing.length; i++) {
         const q = missing[i];
-        $("aiProgress").textContent = `Asking AI for answer ${i+1} of ${missing.length}...`;
+        $("aiProgress").textContent = `Asking AI for answer & explanation ${i+1} of ${missing.length}...`;
         
-        const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question. Reply with ONLY the letter A, B, C, or D.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
+        const prompt = `You are an exam grader. Determine the correct answer and provide a brief explanation (max 2 sentences) for the following multiple-choice question.
+Question: ${q.question}
+A) ${q.options[0]}
+B) ${q.options[1]}
+C) ${q.options[2]}
+D) ${q.options[3]}
+
+Respond in JSON format strictly like this example: {"answer": "A", "explanation": "Because the mitochondria is the powerhouse..."}`;
         
         try {
             const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -366,25 +371,30 @@ $("autoGenerateBtn").onclick = async function() {
             const data = await res.json();
             if(data.error) throw new Error(data.error.message);
             
-            const aiText = data.choices[0].message.content.toUpperCase();
-            const match = aiText.match(/[A-D]/);
+            let aiText = data.choices[0].message.content.toUpperCase();
+            // Clean up potential markdown formatting
+            aiText = aiText.replace(/```json/g, "").replace(/```/g, "").trim();
             
-            if(match) {
-                const ansIndex = match[0].charCodeAt(0) - 65;
-                await db.collection("questions").doc(q.id).update({ answer: ansIndex });
-                successCount++;
-            }
+            const parsed = JSON.parse(aiText);
+            const letter = parsed.answer.match(/[A-D]/)[0];
+            const ansIndex = letter.charCodeAt(0) - 65;
+            const explanation = parsed.explanation || "Explanation generated by AI.";
+            
+            await db.collection("questions").doc(q.id).update({ 
+                answer: ansIndex,
+                explanation: explanation
+            });
+            successCount++;
+            
         } catch(e) {
             console.error("AI failed for Q:", q.question, e);
-            // Don't crash, just skip to the next question
         }
-        // Small delay to prevent API rate-limiting
         await new Promise(r => setTimeout(r, 500));
     }
     
-    $("aiProgress").textContent = `✅ Finished! Successfully generated ${successCount} answers out of ${missing.length}.`;
+    $("aiProgress").textContent = `✅ Finished! Successfully generated ${successCount} answers & explanations out of ${missing.length}.`;
     $("autoGenerateBtn").disabled = false;
-    $("autoGenerateBtn").textContent = "✨ Auto-Generate Missing Answers";
+    $("autoGenerateBtn").textContent = "✨ Auto-Generate Missing Answers & Explanations";
 };
 /* ================================================= */
 
@@ -456,8 +466,9 @@ $("bankBtn").onclick = () => {
   const box = $("bankContent"); box.innerHTML = "";
   questions.forEach((q) => {
     const card = document.createElement("div"); card.className = "question";
-    const ansText = q.answer !== null ? String.fromCharCode(65+q.answer) : "None";
-    card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>`;
+    const ansText = q.answer !== null && q.answer !== undefined ? String.fromCharCode(65+q.answer) : "None";
+    let expl = q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explanation}</div>` : "";
+    card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>` + expl;
     const del = document.createElement("button"); del.textContent = "Delete from Cloud"; del.className = "danger";
     del.onclick = () => { if(confirm("Delete permanently?")) db.collection("questions").doc(q.id).delete(); }; 
     card.appendChild(del); box.appendChild(card);
@@ -491,7 +502,7 @@ window.selAns = (j) => { answers[index] = j; if(mode === "practice") showFeedbac
 function renderQ(){
   const q = quiz[index];
   $("position").textContent = `Question ${index+1} of ${quiz.length}`;
-  $("quizMessage").textContent = "";
+  $("quizMessage").innerHTML = "";
   let html = `<h3>${q.question}</h3>`;
   q.options.forEach((o,j) => {
     html += `<label class="option" id="opt-${j}"><input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}><span>${String.fromCharCode(65+j)}. ${o}</span></label>`;
@@ -509,7 +520,21 @@ function showFeedback(){
     if(j === q.answer) el.style.border = "2px solid #19d3c5";
     if(j === answers[index] && j !== q.answer) el.style.border = "2px solid #ff6577";
   }
-  $("quizMessage").textContent = q.answer === null ? "No answer key." : (answers[index] === q.answer ? "✅ Correct!" : `❌ Incorrect. Correct: ${String.fromCharCode(65+q.answer)}`);
+  
+  let msg = "";
+  if (q.answer === null || q.answer === undefined) {
+      msg = "No answer key available for this question.";
+  } else if (answers[index] === q.answer) {
+      msg = "✅ Correct!";
+  } else {
+      msg = `❌ Incorrect. Correct: ${String.fromCharCode(65+q.answer)}`;
+  }
+  
+  if (q.explanation) {
+      msg += `<div class="explanation-box"><strong>Explanation:</strong> ${q.explanation}</div>`;
+  }
+  
+  $("quizMessage").innerHTML = msg;
 }
 
 $("nextBtn").onclick = () => { 
@@ -522,7 +547,7 @@ $("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
 function finishQuiz(){
   if(timerId) clearInterval(timerId);
   let score = 0, gradable = 0;
-  quiz.forEach((q,i) => { if(q.answer !== null) { gradable++; if(answers[i] === q.answer) score++; } });
+  quiz.forEach((q,i) => { if(q.answer !== null && q.answer !== undefined) { gradable++; if(answers[i] === q.answer) score++; } });
   const percent = gradable > 0 ? Math.round((score / gradable) * 100) : 0;
   
   let comment = "", color = "";
@@ -542,7 +567,8 @@ function finishQuiz(){
   
   let reviewHtml = "";
   quiz.forEach((q,i) => {
-    reviewHtml += `<div class="question"><p><strong>Q${i+1}: ${q.question}</strong></p><p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p><p class="small" style="color:#19d3c5;">Correct: ${q.answer!==null?String.fromCharCode(65+q.answer):"None"}</p></div>`;
+    let expl = q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explanation}</div>` : "";
+    reviewHtml += `<div class="question"><p><strong>Q${i+1}: ${q.question}</strong></p><p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p><p class="small" style="color:#19d3c5;">Correct: ${q.answer!==null && q.answer!==undefined?String.fromCharCode(65+q.answer):"None"}</p>${expl}</div>`;
   });
   $("review").innerHTML = reviewHtml;
   mode = ""; showPage("resultPage");
@@ -585,7 +611,7 @@ function saveImportedQuestions(importedData) {
 function parseQuestionJSON(text){ try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON."); } }
 function processImported(data, defaultSubject, defaultTopic, defaultSetName){
   if(!Array.isArray(data) || data.length === 0) throw Error("Needs a non-empty array.");
-  return data.map(q => ({ question: q.question.trim(), options: q.options.map(o => String(o).trim()), answer: normalizeAnswer(q.answer), subject: normalizeSubject(q.subject || defaultSubject), setName: normalizeSet(q.setName || defaultSetName), topic: normalizeTopic(q.topic || defaultTopic) })).filter(q => q.question && q.options.length === 4);
+  return data.map(q => ({ question: q.question.trim(), options: q.options.map(o => String(o).trim()), answer: normalizeAnswer(q.answer), explanation: q.explanation || "", subject: normalizeSubject(q.subject || defaultSubject), setName: normalizeSet(q.setName || defaultSetName), topic: normalizeTopic(q.topic || defaultTopic) })).filter(q => q.question && q.options.length === 4);
 }
 
 function parseDocumentQuestions(rawText, defaultSubject){
@@ -616,7 +642,7 @@ function parseDocumentQuestions(rawText, defaultSubject){
   for(const item of questionChunks){
     if(item.options.length !== 4 || item.options.some(o => !o)) continue;
     const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
-    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: item.options, answer: answer, subject: defaultSubject });
+    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: item.options, answer: answer, explanation: "", subject: defaultSubject });
   }
   return imported;
 }
