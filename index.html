@@ -222,8 +222,8 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
 const API_KEY = "smartExamGeminiKey";
-// UPDATED MODEL NAME HERE:
-const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
+// UPDATED MODEL NAME TO gemini-3.8-flash
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
