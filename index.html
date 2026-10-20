@@ -32,6 +32,7 @@ hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 a{color:#19d3c5;overflow-wrap:anywhere}
 .subject-header{background:#2b405f;padding:10px;border-radius:8px;margin-top:20px;font-weight:bold;color:#19d3c5;font-size:18px}
 .set-header{background:#192b48;padding:8px;border-left:4px solid #3988ff;margin:15px 0 10px 0;font-weight:bold;color:#ffffff}
+.loading-msg { color: #3988ff; font-weight: bold; text-align: center; margin: 10px 0; }
 </style>
 </head>
 <body>
@@ -123,9 +124,10 @@ window.addEventListener("error", function(event) {
 <label for="d">Option D</label><input id="d" placeholder="Option D">
 
 <div class="info">
-  <strong>🤖 Need the answer?</strong>
-  <p class="small">Open normal ChatGPT to find the correct answer.</p>
-  <button id="openChatGPTBtn" type="button" style="background:#10a37f; color:white;">Open ChatGPT to get Answer</button>
+  <strong>🤖 AI Auto-Answer (Google Gemini)</strong>
+  <p class="small">Get a free API key from <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>.</p>
+  <input id="apiKey" type="password" placeholder="Paste Google API Key here (starts with AIza...)">
+  <button id="aiAnswerBtn" class="secondary" type="button">Ask AI for Correct Answer</button>
 </div>
 
 <label for="correct">Correct answer</label>
@@ -152,10 +154,6 @@ window.addEventListener("error", function(event) {
 <label for="importTopic">Default topic</label>
 <input id="importTopic" list="topicSuggestions" placeholder="e.g. Projectile Motion">
 
-<div class="info">
-<strong>JSON example:</strong>
-<pre style="color:#19d3c5">[{"question":"2+2?","options":["3","4","5","6"],"answer":"B","subject":"Mathematics"}]</pre>
-</div>
 <label for="jsonText">Paste JSON questions</label>
 <textarea id="jsonText" placeholder="Paste your complete JSON questions here"></textarea>
 <button id="importTextBtn">Import Pasted JSON</button>
@@ -181,6 +179,7 @@ window.addEventListener("error", function(event) {
 <p id="position" class="small"></p>
 <div id="quizContent"></div>
 <p id="quizMessage" class="small"></p>
+<div id="aiLoading" class="loading-msg hidden">🤖 AI is grading, please wait...</div>
 <button id="nextBtn">Next Question →</button>
 <button id="submitBtn" class="danger hidden">Submit Examination</button>
 <button id="quitBtn" class="secondary" style="margin-top:10px;">🚪 Quit / Back to Menu</button>
@@ -217,6 +216,8 @@ const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","Gener
 
 const QUESTIONS_KEY = "smartExamFixedQuestions_v2"; 
 const MINUTES_KEY = "smartExamFixedMinutes";
+const API_KEY = "smartExamGeminiKey";
+const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=";
 
 function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
 function normalizeTopic(value){ return String(value || "").trim() || "General"; }
@@ -232,6 +233,8 @@ try{
   }
   const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
   if(savedMinutes >= 1 && savedMinutes <= 600) minutes = savedMinutes;
+  const savedKey = localStorage.getItem(API_KEY);
+  if(savedKey) $("apiKey").value = savedKey;
 }catch(e){ console.warn("Storage error", e); }
 
 function saveQuestions(){
@@ -271,13 +274,65 @@ function saveDuration(){
   }
 }
 
-$("openChatGPTBtn").onclick = function() {
-    const q = $("qText").value.trim();
-    const a = $("a").value.trim(), b = $("b").value.trim(), c = $("c").value.trim(), d = $("d").value.trim();
-    if(!q || !a || !b || !c || !d) { alert("Please fill out the question and all 4 options first."); return; }
-    const prompt = `What is the correct answer to this multiple-choice question? Reply with ONLY the letter (A, B, C, or D).\n\nQuestion: ${q}\nA) ${a}\nB) ${b}\nC) ${c}\nD) ${d}`;
-    window.open("https://chatgpt.com/?q=" + encodeURIComponent(prompt), "_blank");
-};
+async function getAIAnswerForSingle(q, key) {
+  const prompt = `You are an exam grader. Determine the correct answer for the following multiple-choice question.
+Question: ${q.question}
+A) ${q.options[0]}
+B) ${q.options[1]}
+C) ${q.options[2]}
+D) ${q.options[3]}
+
+Reply with ONLY the correct option letter: A, B, C, or D.`;
+  
+  const res = await fetch(GEMINI_URL + key, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+  });
+  
+  const data = await res.json();
+  if(data.error) throw new Error(data.error.message);
+  
+  if (!data.candidates || !data.candidates[0] || !data.candidates[0].content || !data.candidates[0].content.parts[0].text) {
+      throw new Error("Google blocked the response or returned empty data.");
+  }
+
+  const aiText = data.candidates[0].content.parts[0].text.trim().toUpperCase();
+  const match = aiText.match(/[A-D]/);
+  
+  if(match) {
+    return match[0].charCodeAt(0) - 65; 
+  }
+  throw new Error("AI replied, but didn't give a clear A, B, C, or D.");
+}
+
+async function getAIAnswer() {
+  const key = $("apiKey").value.trim();
+  if(!key) { alert("Please enter your Google API key first."); return; }
+  if(!key.startsWith("AIza")) { alert("This doesn't look like a Google API key. It usually starts with 'AIza'."); }
+  
+  localStorage.setItem(API_KEY, key);
+
+  const q = $("qText").value.trim();
+  const opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
+  if(!q || opts.some(x => !x)) { alert("Fill out the question and all 4 options first."); return; }
+
+  $("addMessage").textContent = "🤖 AI is thinking... Please wait.";
+  $("aiAnswerBtn").disabled = true;
+
+  try {
+    const ansIndex = await getAIAnswerForSingle({question: q, options: opts}, key);
+    if(ansIndex !== null) {
+      const letter = String.fromCharCode(65 + ansIndex);
+      $("correct").value = ansIndex;
+      $("addMessage").textContent = "✅ AI found the answer: Option " + letter;
+    }
+  } catch (err) {
+    $("addMessage").textContent = "❌ AI Error: " + err.message;
+  } finally {
+    $("aiAnswerBtn").disabled = false;
+  }
+}
 
 function addQuestion(){
   const q = $("qText").value.trim();
@@ -347,6 +402,7 @@ function importText(){
   }catch(e){ $("importMessage").textContent = "Error: " + e.message; }
 }
 
+/* IMPROVED PDF PARSER TO PREVENT TITLE INJECTION */
 function parseDocumentQuestions(rawText, defaultSubject){
   if(!rawText) throw Error("No text found.");
   let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
@@ -376,7 +432,13 @@ function parseDocumentQuestions(rawText, defaultSubject){
     if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
     if(!current) continue;
     const opt = optionLine.exec(line);
-    if(opt){ current.options[opt[1].toUpperCase().charCodeAt(0)-65] = opt[2].trim(); continue; }
+    if(opt){ 
+        // If the option is extremely long, it's probably a title mixed in. Truncate it.
+        let optText = opt[2].trim();
+        if(optText.length > 150) optText = optText.substring(0, 150) + "...";
+        current.options[opt[1].toUpperCase().charCodeAt(0)-65] = optText; 
+        continue; 
+    }
     const inlineAnswer = answerLine.exec(line);
     if(inlineAnswer){ current.answer = normalizeAnswer(inlineAnswer[2]); continue; }
     current.parts.push(line);
@@ -523,6 +585,7 @@ function startQuiz(which){
   $("submitBtn").classList.toggle("hidden",which !== "exam");
   $("quitBtn").classList.remove("hidden"); 
   $("quizMessage").textContent = "";
+  $("aiLoading").classList.add("hidden");
 
   if(which === "exam"){
     seconds = minutes * 60;
@@ -553,11 +616,27 @@ function renderQuestion(){
     const radio = document.createElement("input");
     radio.type = "radio"; radio.name = "choice"; radio.checked = answers[index] === j;
     
-    radio.onchange = function() { 
+    radio.onchange = async function() { 
       if(locked) return; 
       answers[index] = j; 
       if(mode === "practice"){ 
         locked = true; 
+        if(q.answer === null) {
+           $("quizMessage").textContent = "";
+           $("aiLoading").classList.remove("hidden");
+           const key = localStorage.getItem(API_KEY);
+           if(key) {
+             try { 
+                 const aiAns = await getAIAnswerForSingle(q, key);
+                 if(aiAns !== null) q.answer = aiAns;
+             } catch(e) { 
+                 $("quizMessage").textContent = "AI Error: " + e.message; 
+             }
+           } else {
+               $("quizMessage").textContent = "No API key saved. Cannot use AI.";
+           }
+           $("aiLoading").classList.add("hidden");
+        }
         showFeedback(); 
       } 
     };
@@ -576,7 +655,7 @@ function showFeedback(){
     if(q.answer !== null && j === q.answer) label.style.border = "2px solid #19d3c5";
     if(q.answer !== null && j === answers[index] && j !== q.answer) label.style.border = "2px solid #ff6577";
   });
-  if(q.answer === null) $("quizMessage").textContent = "Saved. (No answer key).";
+  if(q.answer === null) $("quizMessage").textContent = $("quizMessage").textContent || "Saved. (No answer key, AI could not grade).";
   else $("quizMessage").textContent = answers[index] === q.answer ? "Correct!" : "Incorrect. Answer: " + String.fromCharCode(65+q.answer);
 }
 
@@ -587,9 +666,33 @@ function nextQuestion(){
   else finish(false);
 }
 
-function finish(expired){
+async function finish(expired){
   if(timerId) clearInterval(timerId);
   
+  const key = localStorage.getItem(API_KEY);
+  const ungradedIndices = quiz.map((q, i) => q.answer === null ? i : -1).filter(i => i !== -1);
+  
+  if(ungradedIndices.length > 0 && key) {
+      $("quizMessage").textContent = "";
+      $("aiLoading").classList.remove("hidden");
+      $("aiLoading").textContent = "🤖 AI is grading " + ungradedIndices.length + " questions...";
+      $("submitBtn").disabled = true;
+      $("nextBtn").disabled = true;
+      $("quitBtn").disabled = true;
+
+      for(let i of ungradedIndices) {
+          try {
+              const aiAns = await getAIAnswerForSingle(quiz[i], key);
+              if(aiAns !== null) quiz[i].answer = aiAns;
+          } catch(e) {
+              console.warn("Failed AI grading", e);
+          }
+      }
+      $("submitBtn").disabled = false;
+      $("nextBtn").disabled = false;
+      $("quitBtn").disabled = false;
+  }
+
   let score = 0, gradable = 0;
   quiz.forEach((q,i) => { if(q.answer !== null){ gradable++; if(answers[i] === q.answer) score++; } });
 
@@ -608,6 +711,7 @@ function finish(expired){
     review.appendChild(card);
   });
   mode = ""; 
+  $("aiLoading").classList.add("hidden");
   showPage("resultPage");
 }
 
@@ -656,6 +760,7 @@ $("addSubject").onchange = refreshTopicSuggestions;
 $("continueBtn").onclick = login;
 $("saveDurationBtn").onclick = saveDuration;
 $("saveQuestionBtn").onclick = addQuestion;
+$("aiAnswerBtn").onclick = getAIAnswer;
 $("importTextBtn").onclick = importText;
 $("chooseFileBtn").onclick = function() { $("jsonFile").click(); };
 $("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
