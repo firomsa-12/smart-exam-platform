@@ -29,7 +29,31 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 .timer{text-align:center;color:#19d3c5;font-size:24px;font-weight:bold;margin:15px}
 .option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0;cursor:pointer}
 .option input{width:auto}
-.explanation-box{background:#1d3557;padding:10px;border-radius:6px;margin-top:10px;border-left:4px solid #19d3c5;color:#e0f2fe}
+
+/* EXACT MATCH FOR THE BLUE AI EXPLANATION BOX */
+.explanation-box {
+    background: #0f2645;
+    border: 1px solid #2b5c8f;
+    border-radius: 12px;
+    padding: 20px;
+    margin-top: 15px;
+    color: #e2e8f0;
+    line-height: 1.6;
+    font-size: 15px;
+}
+.ai-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 15px;
+    color: #ffffff;
+}
+.explanation-box strong { color: #ffffff; }
+.explanation-box ul { margin: 10px 0; padding-left: 20px; }
+.explanation-box li { margin-bottom: 8px; }
+
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
@@ -54,6 +78,14 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <p id="welcome"></p>
 <div class="info">Total Questions available online: <strong id="count">0</strong></div>
 <p id="cloudStatus" class="small">Connecting to Firebase...</p>
+
+<div class="info" style="border: 1px solid #19d3c5;">
+<h3 style="color:#19d3c5; margin-top: 0;">⚡ Fast AI Setup (Groq)</h3>
+<p class="small">Paste your Free Groq API Key (gsk_...). Get one at <a href="https://console.groq.com/keys" target="_blank">console.groq.com</a>.</p>
+<input id="mainAiKey" type="password" placeholder="Paste Groq API Key here (gsk_...)">
+<button id="saveAiKey" class="secondary">Save AI Key</button>
+<p id="aiStatus" class="small" style="color:#19d3c5;"></p>
+</div>
 
 <label>Subject</label>
 <select id="quizSubject">
@@ -143,11 +175,11 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <section id="adminPage" class="card hidden">
 <h2>📊 Teacher Dashboard</h2>
 <div class="info" style="border: 1px solid #19d3c5;">
-<h3 style="color:#19d3c5; margin-top: 0;">🤖 AI Setup</h3>
-<p class="small">Paste your Free OpenRouter API Key (sk-or-v1-...). Saved locally on this phone.</p>
-<input id="mainAiKey" type="password" placeholder="sk-or-v1-...">
-<button id="saveAiKey" class="secondary">Save AI Key</button>
-<p id="aiStatus" class="small"></p>
+<h3 style="color:#19d3c5; margin-top: 0;">⚡ AI Setup</h3>
+<p class="small">Paste your Free Groq API Key (gsk_...).</p>
+<input id="adminAiKey" type="password" placeholder="gsk_...">
+<button id="saveAdminAiKey" class="secondary">Save AI Key</button>
+<p id="adminAiStatus" class="small"></p>
 
 <hr style="border-color: #2b405f;">
 <button id="bulkGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers for All Questions</button>
@@ -200,7 +232,7 @@ let questions=[],student={name:'',school:''},quiz=[],answers=[],index=0,mode='',
 let examStartTime = null, examFinishTime = null;
 let currentExamSubject = 'All', currentExamSet = 'All', currentExamTopic = 'All';
 
-const AI_KEY='smartExamOpenRouterKey';
+const AI_KEY='smartExamGroqKey';
 const normSubject=s=>['Physics','Chemistry','Biology','Mathematics','English','General'].includes(s)?s:'General';
 const normSet=s=>String(s||'').trim()||'Default Set';
 const normTopic=s=>String(s||'').trim()||'General';
@@ -215,7 +247,11 @@ function normAnswer(a){
 }
 try{
   const k=localStorage.getItem(AI_KEY);
-  if(k)$('mainAiKey').value=k
+  if(k) {
+      $('mainAiKey').value=k;
+      $('adminAiKey').value=k;
+      $('aiStatus').textContent='✅ AI Key is saved.';
+  }
 }catch(e){}
 
 auth.signInAnonymously().then(()=>{
@@ -256,31 +292,51 @@ $('continueBtn').onclick=()=>{
 
 $('saveAiKey').onclick=()=>{
   let k=$('mainAiKey').value.trim();
-  if(!k.startsWith('sk-or-v1-')){$('aiStatus').textContent='Please enter a valid-looking OpenRouter key beginning sk-or-v1-.';return}
+  if(!k.startsWith('gsk_')){$('aiStatus').textContent='Please enter a valid Groq key starting with gsk_.';return}
   try{
     localStorage.setItem(AI_KEY,k);
-    $('aiStatus').textContent='AI key saved on this device.'
+    $('adminAiKey').value=k;
+    $('aiStatus').textContent='✅ AI Key saved successfully!';
   }catch(e){
     $('aiStatus').textContent='Could not save key.'
+  }
+};
+
+$('saveAdminAiKey').onclick=()=>{
+  let k=$('adminAiKey').value.trim();
+  if(!k.startsWith('gsk_')){$('adminAiStatus').textContent='Please enter a valid Groq key starting with gsk_.';return}
+  try{
+    localStorage.setItem(AI_KEY,k);
+    $('mainAiKey').value=k;
+    $('adminAiStatus').textContent='✅ AI Key saved successfully!';
+  }catch(e){
+    $('adminAiStatus').textContent='Could not save key.'
   }
 };
 
 async function askAI(q){
   let key='';
   try{key=localStorage.getItem(AI_KEY)||''}catch(e){}
-  if(!key)throw Error('Add your OpenRouter API key in the Teacher Dashboard first.');
-  const prompt=`Solve this multiple-choice educational question carefully. Return ONLY valid JSON: {"answer":"A","explanation":"brief explanation"}. If the options do not contain a clear answer, choose the best option and say uncertainty in explanation.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
-  const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+  if(!key)throw Error('Add your Groq API Key first.');
+  
+  const prompt = `You are an expert exam grader. Determine the correct answer and provide a highly detailed explanation for the following multiple-choice question. \nUse Markdown formatting to structure your response (use **bold** for key terms, and use bullet points for lists).\n\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}\n\nRespond strictly in JSON format: {"answer": "A", "explanation": "**Core Concept:** This is why...\\n\\n**Conclusion:** Therefore, A is correct."}`;
+
+  const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
     method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key,'HTTP-Referer':location.origin,'X-Title':'Smart Exam Platform'},
-    body:JSON.stringify({model:'openrouter/free', messages:[{role:'user',content:prompt}],temperature:0})
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+    body:JSON.stringify({
+      model: "llama-3.1-8b-instant", // FASTEST MODEL
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0,
+      response_format: { type: "json_object" } // Forces instant, perfectly formatted JSON
+    })
   });
+  
   let data;
   try{data=await res.json()}catch(e){throw Error('AI returned an unreadable response.')}
-  if(!res.ok||data.error)throw Error((data.error&&data.error.message)||('OpenRouter request failed ('+res.status+').'));
-  let content=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
-  if(!content)throw Error('AI returned no answer.');
-  content=content.replace(/```json|```/gi,'').trim();
+  if(!res.ok||data.error)throw Error((data.error&&data.error.message)||('Groq request failed ('+res.status+').'));
+  
+  let content=data.choices[0].message.content.trim();
   let parsed;
   try{parsed=JSON.parse(content)}catch(e){
     let m=content.match(/\b(?:answer\s*[:=]?\s*)?([A-D])\b/i);
@@ -290,6 +346,24 @@ async function askAI(q){
   let answer=normAnswer(parsed.answer);
   if(answer===null)throw Error('AI did not return A, B, C, or D.');
   return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
+}
+
+// Turns the **asterisks** into bold text and puts it in the blue box
+function formatExplanation(text) {
+    if (!text) return "";
+    let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); 
+    formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>'); 
+    formatted = formatted.replace(/\n/g, '<br>'); 
+    formatted = formatted.replace(/- (.*?)(<br>|$)/g, '<li>$1</li>'); 
+    if (formatted.includes('<li>')) {
+        formatted = formatted.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    }
+    
+    return `
+    <div class="explanation-box">
+        <div class="ai-header">🤖 AI Generated Explanation</div>
+        <div>${formatted}</div>
+    </div>`;
 }
 
 $('bulkGenerateBtn').onclick = async function() {
@@ -311,7 +385,7 @@ $('bulkGenerateBtn').onclick = async function() {
         } catch(e) {
             console.error("Failed on question", missing[i].id, e);
         }
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300)); 
     }
     
     $('bulkGenStatus').textContent = `✅ Finished! Generated ${success} answers out of ${missing.length}.`;
@@ -339,9 +413,10 @@ $('saveQuestion').onclick=async()=>{
   let question=$('qText').value.trim(),options=['a','b','c','d'].map(id=>$(id).value.trim());
   if(!question||options.some(o=>!o)){$('addMessage').textContent='Complete the question and all four options.';return}
   let ans=$('correct').value;
-  let data={
+  
+  let cleanObj = {
     question: String(question),
-    options: options.map(o => String(o || "")), // Ensure string
+    options: options.map(o => String(o)),
     answer:ans===''?null:Number(ans),
     explanation: String($('addExplanation').value.trim()),
     subject:normSubject($('addSubject').value),
@@ -350,9 +425,10 @@ $('saveQuestion').onclick=async()=>{
     createdAt:new Date().toISOString(),
     sequence: new Date().getTime()
   };
+  
   $('addMessage').textContent='Saving online...';
   try{
-    await db.collection('questions').add(data);
+    await db.collection('questions').add(cleanObj);
     $('addMessage').textContent='Question saved online.';
     $('qText').value='';
     ['a','b','c','d','addExplanation'].forEach(id=>$(id).value='')
@@ -371,17 +447,22 @@ $('importJson').onclick=async()=>{
       let q = arr[i];
       if(!q.question||!Array.isArray(q.options)||q.options.length!==4)continue;
       let ref=db.collection('questions').doc();
-      batch.set(ref,{
-        question:String(q.question || ""), 
-        options:[0,1,2,3].map(idx => String(q.options[idx] || "")), // Fix: Prevent undefined
+      
+      let cleanObj = {
+        question: String(q.question || ""), 
+        options: [0,1,2,3].map(idx => String(q.options[idx] || "")),
         answer:normAnswer(q.answer), 
-        explanation:String(q.explanation||''), 
+        explanation: String(q.explanation || ""), 
         subject:normSubject(q.subject||$('importSubject').value), 
         setName:normSet(q.setName||$('importSet').value), 
         topic:normTopic(q.topic||$('importTopic').value),
         createdAt:new Date(now + i).toISOString(),
         sequence: now + i
-      });
+      };
+      
+      Object.keys(cleanObj).forEach(k => { if(cleanObj[k] === undefined) cleanObj[k] = null; });
+      
+      batch.set(ref, cleanObj);
       valid++
     }
     if(!valid)throw Error('No valid questions. Each needs question and four options.');
@@ -433,7 +514,6 @@ function parseDocumentQuestions(rawText, defaultSubject){
   for(const item of questionChunks){
     if(item.options.length !== 4) continue;
     
-    // Fix: Ensure no sparse arrays or undefined elements
     let validOpts = [];
     for(let k=0; k<4; k++) {
         if(typeof item.options[k] !== 'string' || !item.options[k].trim()) {
@@ -441,7 +521,7 @@ function parseDocumentQuestions(rawText, defaultSubject){
         }
         validOpts.push(item.options[k].trim());
     }
-    if(!validOpts) continue; // skip if any option is missing
+    if(!validOpts) continue; 
 
     const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
     imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: validOpts, answer: answer, explanation: "", subject: defaultSubject });
@@ -490,17 +570,21 @@ $('uploadFileBtn').onclick = async function() {
       if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) continue;
       let ref = db.collection('questions').doc();
       
-      batch.set(ref, {
+      let cleanObj = {
         question: String(q.question || ""), 
-        options: [0,1,2,3].map(idx => String(q.options[idx] || "")), // Fix: Prevent undefined holes
+        options: [0,1,2,3].map(idx => String(q.options[idx] || "")), 
         answer: normAnswer(q.answer), 
-        explanation: String(q.explanation||''), 
+        explanation: String(q.explanation || ""), 
         subject: normSubject(q.subject || $('importSubject').value), 
         setName: normSet(q.setName || $('importSet').value || file.name.replace(/\.[^/.]+$/, "")), 
         topic: normTopic(q.topic || $('importTopic').value),
         createdAt: new Date(now + i).toISOString(),
         sequence: now + i
-      });
+      };
+      
+      Object.keys(cleanObj).forEach(k => { if(cleanObj[k] === undefined) cleanObj[k] = null; });
+      
+      batch.set(ref, cleanObj);
       valid++;
     }
     
@@ -522,7 +606,6 @@ $('applyKey').onclick=async()=>{
   
   let list=questions.filter(q=>q.subject===sub&&(q.setName||'Default Set')===set);
   
-  // STRICT SORT BY SEQUENCE
   list.sort((a,b) => {
       let seqA = a.sequence !== undefined ? a.sequence : new Date(a.createdAt || 0).getTime();
       let seqB = b.sequence !== undefined ? b.sequence : new Date(b.createdAt || 0).getTime();
@@ -552,7 +635,8 @@ function renderBank(){
   questions.forEach(q=>{
     let div=document.createElement('div');
     div.className='question';
-    div.innerHTML=`<h3>[${esc(q.subject||'General')} — ${esc(q.topic||'General')}] ${esc(q.question)}</h3>`+q.options.map((o,i)=>`<p>${'ABCD'[i]}. ${esc(o)}</p>`).join('')+`<p class="small">Set: ${esc(q.setName||'Default Set')} · Answer: ${q.answer===null?'Not set':'ABCD'[q.answer]}</p>`+(q.explanation?`<div class="explanation-box">${esc(q.explanation)}</div>`:'');
+    let formattedExpl = formatExplanation(q.explanation);
+    div.innerHTML=`<h3>[${esc(q.subject||'General')} — ${esc(q.topic||'General')}] ${esc(q.question)}</h3>`+q.options.map((o,i)=>`<p>${'ABCD'[i]}. ${esc(o)}</p>`).join('')+`<p class="small">Set: ${esc(q.setName||'Default Set')} · Answer: ${q.answer===null?'Not set':'ABCD'[q.answer]}</p>`+(formattedExpl?`<div style="margin-top:10px;">${formattedExpl}</div>`:'');
     let b=document.createElement('button');
     b.className='danger';
     b.textContent='Delete from Cloud';
@@ -582,7 +666,7 @@ async function startQuiz(type){
       if(!ok) return;
       
       let key = localStorage.getItem(AI_KEY);
-      if(!key) { alert("You need an AI Key in the Teacher Dashboard to auto-generate answers."); return; }
+      if(!key) { alert("You need an AI Key to auto-generate answers."); return; }
       
       $('cloudStatus').textContent = "AI is generating missing answers. Please wait...";
       for(let i=0; i<list.length; i++) {
@@ -680,7 +764,10 @@ function showFeedback(){
     el.style.border=j===q.answer?'2px solid #19d3c5':(j===answers[index]?'2px solid #ff6577':'0')
   }
   let msg=q.answer===null?'No answer key available.':answers[index]===q.answer?'✅ Correct!':`❌ Incorrect. Correct answer: ${'ABCD'[q.answer]}`;
-  if(q.explanation)msg+=`<div class="explanation-box"><strong>Explanation:</strong> ${esc(q.explanation)}</div>`;
+  
+  if(q.explanation) {
+      msg += `<div style="margin-top:10px;">${formatExplanation(q.explanation)}</div>`;
+  }
   $('quizMessage').innerHTML=msg
 }
 
@@ -753,7 +840,6 @@ async function finishQuiz(){
           const snapshot = await db.collection('results').get();
           let allResults = snapshot.docs.map(d => d.data());
           
-          // ONLY COMPARE RESULTS WITH THE SAME SUBJECT AND SET
           let relevantResults = allResults.filter(r => {
               let matchSub = (currentExamSubject === 'All' || r.examSubject === currentExamSubject);
               let matchSet = (currentExamSet === 'All' || r.examSet === currentExamSet);
@@ -776,7 +862,12 @@ async function finishQuiz(){
       }
   }
 
-  $('review').innerHTML=quiz.map((q,i)=>`<div class="question"><p><strong>Q${i+1}: ${esc(q.question)}</strong></p><p class="small">Your answer: ${answers[i]===null?'None':'ABCD'[answers[i]]}</p><p class="small">Correct answer: ${q.answer===null?'None':'ABCD'[q.answer]}</p>${q.explanation?`<div class="explanation-box">${esc(q.explanation)}</div>`:''}</div>`).join('');
+  let reviewHtml = "";
+  quiz.forEach((q,i)=>{
+      let formattedExpl = formatExplanation(q.explanation);
+      reviewHtml += `<div class="question"><p><strong>Q${i+1}: ${esc(q.question)}</strong></p><p class="small">Your answer: ${answers[i]===null?'None':'ABCD'[answers[i]]}</p><p class="small">Correct answer: ${q.answer===null?'None':'ABCD'[q.answer]}</p>${formattedExpl?`<div style="margin-top:10px;">${formattedExpl}</div>`:''}</div>`;
+  });
+  $('review').innerHTML=reviewHtml;
   
   mode='';
   examStartTime = null; 
@@ -827,7 +918,6 @@ async function loadResults(){
     
     let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    // Calculate rank by grouping by Subject + Set
     let groups = {};
     results.forEach(r => {
         let key = `${r.examSubject || 'All'}_${r.examSet || 'All'}`;
