@@ -225,7 +225,14 @@ auth.signInAnonymously().then(()=>{
 });
 
 db.collection('questions').onSnapshot(s=>{
-  questions=s.docs.map(d=>({id:d.id,...d.data(),answer:normAnswer(d.data().answer)}));
+  // Sort by sequence number, or createdAt if sequence is missing
+  questions = s.docs.map(d=>({id:d.id,...d.data(),answer:normAnswer(d.data().answer)}))
+    .sort((a, b) => {
+        let seqA = a.sequence !== undefined ? a.sequence : new Date(a.createdAt || 0).getTime();
+        let seqB = b.sequence !== undefined ? b.sequence : new Date(b.createdAt || 0).getTime();
+        return seqA - seqB;
+    });
+    
   $('count').textContent=questions.length;
   refreshDropdowns();
   $('cloudStatus').textContent='Questions synced online.'
@@ -340,7 +347,8 @@ $('saveQuestion').onclick=async()=>{
     subject:normSubject($('addSubject').value),
     setName:normSet($('addSet').value),
     topic:normTopic($('addTopic').value),
-    createdAt:new Date().toISOString()
+    createdAt:new Date().toISOString(),
+    sequence: new Date().getTime()
   };
   $('addMessage').textContent='Saving online...';
   try{
@@ -358,11 +366,21 @@ $('importJson').onclick=async()=>{
     let arr=JSON.parse($('jsonText').value);
     if(!Array.isArray(arr)||!arr.length)throw Error('Paste a non-empty JSON array.');
     let batch=db.batch(),valid=0;
-    for(const q of arr){
+    let now = new Date().getTime();
+    for(let i=0; i<arr.length; i++){
+      let q = arr[i];
       if(!q.question||!Array.isArray(q.options)||q.options.length!==4)continue;
       let ref=db.collection('questions').doc();
       batch.set(ref,{
-        question:String(q.question), options:q.options.map(String), answer:normAnswer(q.answer), explanation:String(q.explanation||''), subject:normSubject(q.subject||$('importSubject').value), setName:normSet(q.setName||$('importSet').value), topic:normTopic(q.topic||$('importTopic').value)
+        question:String(q.question), 
+        options:q.options.map(String), 
+        answer:normAnswer(q.answer), 
+        explanation:String(q.explanation||''), 
+        subject:normSubject(q.subject||$('importSubject').value), 
+        setName:normSet(q.setName||$('importSet').value), 
+        topic:normTopic(q.topic||$('importTopic').value),
+        createdAt:new Date(now + i).toISOString(),
+        sequence: now + i
       });
       valid++
     }
@@ -454,7 +472,10 @@ $('uploadFileBtn').onclick = async function() {
     if(!Array.isArray(data) || data.length === 0) throw Error("No questions detected. Make sure numbers and A-D options are clearly separated.");
 
     let batch = db.batch(), valid = 0;
-    for(const q of data){
+    let now = new Date().getTime();
+    
+    for(let i=0; i<data.length; i++){
+      let q = data[i];
       if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) continue;
       let ref = db.collection('questions').doc();
       batch.set(ref, {
@@ -464,7 +485,9 @@ $('uploadFileBtn').onclick = async function() {
         explanation: String(q.explanation||''), 
         subject: normSubject(q.subject || $('importSubject').value), 
         setName: normSet(q.setName || $('importSet').value || file.name.replace(/\.[^/.]+$/, "")), 
-        topic: normTopic(q.topic || $('importTopic').value)
+        topic: normTopic(q.topic || $('importTopic').value),
+        createdAt: new Date(now + i).toISOString(),
+        sequence: now + i
       });
       valid++;
     }
@@ -484,7 +507,16 @@ $('applyKey').onclick=async()=>{
   const re=/(\d+)\s*[.)\-:]?\s*([A-D])/gi;
   let m;
   while((m=re.exec(text))!==null)mp[Number(m[1])]=normAnswer(m[2]);
+  
   let list=questions.filter(q=>q.subject===sub&&(q.setName||'Default Set')===set);
+  
+  // STRICT SORT BY SEQUENCE
+  list.sort((a,b) => {
+      let seqA = a.sequence !== undefined ? a.sequence : new Date(a.createdAt || 0).getTime();
+      let seqB = b.sequence !== undefined ? b.sequence : new Date(b.createdAt || 0).getTime();
+      return seqA - seqB;
+  });
+  
   if(!list.length){$('keyMessage').textContent='No questions match that subject and set name.';return}
   try{
     let batch=db.batch(),n=0;
@@ -708,17 +740,25 @@ async function finishQuiz(){
       try {
           const snapshot = await db.collection('results').get();
           let allResults = snapshot.docs.map(d => d.data());
-          allResults.sort((a, b) => b.percentage - a.percentage);
+          
+          // FIX: ONLY COMPARE RESULTS WITH THE SAME SUBJECT AND SET
+          let relevantResults = allResults.filter(r => {
+              let matchSub = (currentExamSubject === 'All' || r.examSubject === currentExamSubject);
+              let matchSet = (currentExamSet === 'All' || r.examSet === currentExamSet);
+              return matchSub && matchSet;
+          });
+          
+          relevantResults.sort((a, b) => b.percentage - a.percentage);
           
           let currentRank = 1, tieCount = 0, prevPct = -1;
-          allResults.forEach(r => {
+          relevantResults.forEach(r => {
               if (r.percentage === prevPct) tieCount++;
               else { currentRank += tieCount; tieCount = 1; prevPct = r.percentage; }
               r.rank = currentRank;
           });
           
-          let myResult = allResults.find(r => r.studentName === student.name && r.finishTime === examFinishTime.toISOString());
-          if(myResult) $('studentRank').innerHTML = `🏆 Your Rank: #${myResult.rank}`;
+          let myResult = relevantResults.find(r => r.studentName === student.name && r.finishTime === examFinishTime.toISOString());
+          if(myResult) $('studentRank').innerHTML = `🏆 Rank in ${currentExamSubject}: #${myResult.rank}`;
       } catch(e) {
           console.log("Rank calc error", e);
       }
@@ -774,13 +814,25 @@ async function loadResults(){
     if(snap.empty){ box.innerHTML='<p class="small">No results yet.</p>'; return; }
     
     let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    results.sort((a, b) => b.percentage - a.percentage);
     
-    let currentRank = 1, tieCount = 0, prevPct = -1;
+    // FIX: Calculate rank by grouping by Subject + Set
+    let groups = {};
     results.forEach(r => {
-        if (r.percentage === prevPct) tieCount++;
-        else { currentRank += tieCount; tieCount = 1; prevPct = r.percentage; }
-        r.rank = currentRank;
+        let key = `${r.examSubject || 'All'}_${r.examSet || 'All'}`;
+        if(!groups[key]) groups[key] = [];
+        groups[key].push(r);
+    });
+
+    Object.keys(groups).forEach(key => {
+        let group = groups[key];
+        group.sort((a, b) => b.percentage - a.percentage);
+        
+        let currentRank = 1, tieCount = 0, prevPct = -1;
+        group.forEach(r => {
+            if (r.percentage === prevPct) tieCount++;
+            else { currentRank += tieCount; tieCount = 1; prevPct = r.percentage; }
+            r.rank = currentRank;
+        });
     });
 
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -796,13 +848,13 @@ async function loadResults(){
       let details = `Sub: ${r.examSubject || 'All'} | Set: ${r.examSet || 'All'} | Topic: ${r.examTopic || 'All'}`;
 
       div.innerHTML=`<strong>${esc(r.studentName)} (${esc(r.school)})</strong>
-      <div style="margin: 5px 0; font-weight: bold; color: #ff9800;">🏆 Rank: #${r.rank}</div>
+      <div style="margin: 5px 0; font-weight: bold; color: #ff9800;">🏆 Rank: #${r.rank} (in this Subject)</div>
       <p>Score: ${r.score}/${r.total} · ${r.percentage}%</p>
       <p class="small" style="color:#3988ff; font-weight:bold;">${details}</p>
       <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>
       <button class="danger del-btn" onclick="window.deleteSingleResult('${r.id}')">Delete</button>`;
       
-      box.appendChild(div); // FIXED BUG HERE
+      box.appendChild(div); 
     })
   }catch(e){
     box.textContent='Results error: '+e.message
