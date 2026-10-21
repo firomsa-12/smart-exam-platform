@@ -4,13 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Exam Platform</title>
-<!-- FIREBASE & FILE PARSER SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
-
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:16px;background:#081225;color:#f0f5ff;font-family:Arial,sans-serif}
@@ -150,7 +148,13 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <input id="mainAiKey" type="password" placeholder="sk-or-v1-...">
 <button id="saveAiKey" class="secondary">Save AI Key</button>
 <p id="aiStatus" class="small"></p>
+
+<!-- NEW: BULK GENERATE BUTTON -->
+<hr style="border-color: #2b405f;">
+<button id="bulkGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers for All Questions</button>
+<p id="bulkGenStatus" class="small" style="color:#19d3c5;"></p>
 </div>
+
 <h3>📈 Student Results</h3>
 <div style="display:flex; gap:10px;">
   <button id="refreshResults" class="secondary" style="flex:2;">🔄 Refresh Results</button>
@@ -283,6 +287,33 @@ async function askAI(q){
   return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
 }
 
+// NEW: BULK GENERATE FOR TEACHER
+$('bulkGenerateBtn').onclick = async function() {
+    let key = localStorage.getItem(AI_KEY);
+    if(!key) { alert("Please save your AI Key first."); return; }
+    
+    let missing = questions.filter(q => q.answer === null || q.answer === undefined);
+    if(missing.length === 0) { $('bulkGenStatus').textContent = "All questions already have answers!"; return; }
+    
+    $('bulkGenerateBtn').disabled = true;
+    let success = 0;
+    
+    for(let i=0; i<missing.length; i++) {
+        $('bulkGenStatus').textContent = `Generating answer ${i+1} of ${missing.length}...`;
+        try {
+            let r = await askAI(missing[i]);
+            await db.collection('questions').doc(missing[i].id).update({answer: r.answer, explanation: r.explanation});
+            success++;
+        } catch(e) {
+            console.error("Failed on question", missing[i].id, e);
+        }
+        await new Promise(resolve => setTimeout(resolve, 500)); // Prevent API rate limit
+    }
+    
+    $('bulkGenStatus').textContent = `✅ Finished! Generated ${success} answers out of ${missing.length}.`;
+    $('bulkGenerateBtn').disabled = false;
+};
+
 function refreshDropdowns(){
   let sub=$('quizSubject').value,setOld=$('quizSet').value,topicOld=$('quizTopic').value;
   let sets=[...new Set(questions.filter(q=>sub==='All'||q.subject===sub).map(q=>q.setName||'Default Set'))].sort();
@@ -346,7 +377,6 @@ $('importJson').onclick=async()=>{
   }
 };
 
-/* ================= FILE UPLOAD LOGIC ================= */
 function parseDocumentQuestions(rawText, defaultSubject){
   if(!rawText) throw Error("No text found.");
   let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
@@ -450,7 +480,6 @@ $('uploadFileBtn').onclick = async function() {
     $('importMessage').textContent = "Error importing file: " + e.message;
   }
 };
-/* ================================================= */
 
 $('applyKey').onclick=async()=>{
   let set=normSet($('keySet').value),sub=$('keySubject').value,text=$('keyText').value,mp={};
@@ -499,6 +528,30 @@ async function startQuiz(type){
   
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
+  
+  // NEW: Auto-generate missing answers before exam
+  if(type==='exam' && list.some(q => q.answer === null || q.answer === undefined)){
+      let ok = confirm("Some questions have no manual answer. Use AI to generate missing answers before the exam starts?");
+      if(!ok) return;
+      
+      let key = localStorage.getItem(AI_KEY);
+      if(!key) { alert("You need an AI Key in the Teacher Dashboard to auto-generate answers."); return; }
+      
+      $('cloudStatus').textContent = "AI is generating missing answers. Please wait...";
+      for(let i=0; i<list.length; i++) {
+          if(list[i].answer === null || list[i].answer === undefined) {
+              $('cloudStatus').textContent = `Generating answers: ${i+1}/${list.length}`;
+              try {
+                  let r = await askAI(list[i]);
+                  list[i].answer = r.answer;
+                  list[i].explanation = r.explanation;
+                  await db.collection('questions').doc(list[i].id).update({answer: r.answer, explanation: r.explanation});
+              } catch(e) { console.log("AI error:", e); }
+          }
+      }
+      $('cloudStatus').textContent = "Questions synced online.";
+  }
+
   list=list.slice().sort(()=>Math.random()-.5);
   
   mode=type;
@@ -506,7 +559,6 @@ async function startQuiz(type){
   answers=new Array(list.length).fill(null);
   index=0;
   
-  // Save chosen filters for the result page
   currentExamSubject = sub;
   currentExamSet = set;
   currentExamTopic = topic;
@@ -657,7 +709,7 @@ async function finishQuiz(){
           
           let currentRank = 1, tieCount = 0, prevPct = -1;
           allResults.forEach(r => {
-              if (r.percentage === prevPct) { tieCount++; } 
+              if (r.percentage === prevPct) tieCount++;
               else { currentRank += tieCount; tieCount = 1; prevPct = r.percentage; }
               r.rank = currentRank;
           });
@@ -679,13 +731,11 @@ async function finishQuiz(){
 $('menuResultBtn').onclick=()=>showPage('menuPage');
 document.querySelectorAll('.backBtn').forEach(b=>b.onclick=()=>showPage('menuPage'));
 
-/* ================= TEACHER PIN CHANGED HERE ================= */
 $('adminBtn').onclick=()=>{
   let pin=prompt('Enter Teacher PIN:');
   if(pin==='45678')showPage('adminPage');
   else if(pin!==null)alert('Incorrect PIN.')
 };
-/* ============================================================ */
 
 $('refreshResults').onclick=loadResults;
 
@@ -749,7 +799,7 @@ async function loadResults(){
       <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>
       <button class="danger del-btn" onclick="window.deleteSingleResult('${r.id}')">Delete</button>`;
       
-      box.appendChild(box)
+      box.appendChild(div) // FIXED BUG HERE
     })
   }catch(e){
     box.textContent='Results error: '+e.message
