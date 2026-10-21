@@ -32,6 +32,7 @@ hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
 .rank-badge { text-align: center; font-size: 22px; font-weight: bold; color: #ff9800; margin: 10px 0; }
+.del-btn { width: auto; padding: 6px 12px; font-size: 12px; margin-top: 10px; }
 </style>
 </head>
 <body>
@@ -137,7 +138,10 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <p id="aiStatus" class="small"></p>
 </div>
 <h3>📈 Student Results</h3>
-<button id="refreshResults" class="secondary">Refresh Results</button>
+<div style="display:flex; gap:10px;">
+  <button id="refreshResults" class="secondary" style="flex:2;">🔄 Refresh Results</button>
+  <button id="clearAllResultsBtn" class="danger" style="flex:1;">🗑️ Clear All</button>
+</div>
 <div id="resultsContainer"></div>
 <button class="backBtn secondary" style="margin-top: 20px;">← Back to Menu</button>
 </section>
@@ -384,7 +388,7 @@ async function startQuiz(type){
   if(timerId)clearInterval(timerId);
   
   if(type==='exam'){
-    examStartTime = new Date(); // Record Start Time
+    examStartTime = new Date();
     seconds=30*60;
     $('timer').textContent='Time Left: 30:00';
     timerId=setInterval(()=>{
@@ -492,9 +496,8 @@ async function finishQuiz(){
       timeString = `Started: ${examStartTime.toLocaleTimeString()} <br> Finished: ${examFinishTime.toLocaleTimeString()}`;
   }
   $('timeTrack').innerHTML = timeString;
-  $('studentRank').innerHTML = ""; // Clear previous rank
+  $('studentRank').innerHTML = ""; 
 
-  // Save result to DB first to include in ranking
   let savedSuccessfully = false;
   if(mode==='exam'&&total){
     try{
@@ -514,17 +517,13 @@ async function finishQuiz(){
     }
   }
 
-  // Calculate Rank
   if(mode==='exam' && total && savedSuccessfully) {
       $('studentRank').textContent = "Calculating rank...";
       try {
           const snapshot = await db.collection('results').get();
           let allResults = snapshot.docs.map(d => d.data());
-          
-          // Sort descending by percentage
           allResults.sort((a, b) => b.percentage - a.percentage);
           
-          // Calculate ties
           let currentRank = 1, tieCount = 0, prevPct = -1;
           allResults.forEach(r => {
               if (r.percentage === prevPct) {
@@ -537,10 +536,7 @@ async function finishQuiz(){
               r.rank = currentRank;
           });
           
-          // Find this specific student's result
-          // We match exact percentage and finishTime since we just added it
           let myResult = allResults.find(r => r.studentName === student.name && r.finishTime === examFinishTime.toISOString());
-          
           if(myResult) {
               $('studentRank').innerHTML = `🏆 Your Rank: #${myResult.rank}`;
           } else {
@@ -569,6 +565,35 @@ $('adminBtn').onclick=()=>{
 };
 $('refreshResults').onclick=loadResults;
 
+// NEW: Delete Single Result Function
+window.deleteSingleResult = async function(id) {
+    if(confirm("Are you sure you want to delete this student's result?")) {
+        try {
+            await db.collection('results').doc(id).delete();
+            loadResults(); // Refresh the list
+        } catch(e) {
+            alert("Error deleting result: " + e.message);
+        }
+    }
+};
+
+// NEW: Clear All Results Function
+$('clearAllResultsBtn').onclick = async () => {
+    if(!confirm("⚠️ WARNING: This will permanently delete ALL student results from the cloud. Are you sure?")) return;
+    
+    try {
+        const snapshot = await db.collection('results').get();
+        const batch = db.batch();
+        snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+        loadResults();
+    } catch(e) {
+        alert("Error clearing results: " + e.message);
+    }
+};
+
 async function loadResults(){
   let box=$('resultsContainer');
   box.innerHTML='<p class="small">Loading results...</p>';
@@ -579,12 +604,10 @@ async function loadResults(){
         return;
     }
     
-    let results = snap.docs.map(d => d.data());
+    let results = snap.docs.map(d => ({ id: d.id, ...d.data() })); // Keep the document ID
     
-    // Sort descending by percentage for ranking
     results.sort((a, b) => b.percentage - a.percentage);
     
-    // Calculate ties
     let currentRank = 1, tieCount = 0, prevPct = -1;
     results.forEach(r => {
         if (r.percentage === prevPct) {
@@ -597,7 +620,6 @@ async function loadResults(){
         r.rank = currentRank;
     });
 
-    // We also want to display the newest at the top, so let's sort by date for display
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     box.innerHTML='';
@@ -608,11 +630,11 @@ async function loadResults(){
       let startStr = r.startTime ? new Date(r.startTime).toLocaleTimeString() : 'N/A';
       let finishStr = r.finishTime ? new Date(r.finishTime).toLocaleTimeString() : new Date(r.date).toLocaleTimeString();
 
-      // Display rank prominently
       div.innerHTML=`<strong>${esc(r.studentName)} (${esc(r.school)})</strong>
       <div style="margin: 5px 0; font-weight: bold; color: #ff9800;">🏆 Rank: #${r.rank}</div>
       <p>Score: ${r.score}/${r.total} · ${r.percentage}%</p>
-      <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>`;
+      <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>
+      <button class="danger del-btn" onclick="window.deleteSingleResult('${r.id}')">Delete</button>`;
       
       box.appendChild(div)
     })
