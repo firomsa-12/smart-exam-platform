@@ -4,9 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Exam Platform</title>
+<!-- FIREBASE & FILE PARSER SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:16px;background:#081225;color:#f0f5ff;font-family:Arial,sans-serif}
@@ -31,8 +35,8 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-.rank-badge { text-align: center; font-size: 22px; font-weight: bold; color: #ff9800; margin: 10px 0; }
-.del-btn { width: auto; padding: 6px 12px; font-size: 12px; margin-top: 10px; }
+.rank-badge { text-align:center; font-size:22px; font-weight:bold; color:#ff9800; margin:10px 0; }
+.del-btn { width:auto; padding:6px 12px; font-size:12px; margin-top:10px; }
 </style>
 </head>
 <body>
@@ -68,7 +72,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="examBtn">📝 Start Examination</button>
 <button id="practiceBtn" class="secondary">📚 Start Practice</button>
 <button id="addBtn" class="secondary">➕ Add Question</button>
-<button id="importBtn" class="secondary">📥 Import JSON</button>
+<button id="importBtn" class="secondary">📥 Import File</button>
 <button id="keyBtn" class="secondary" style="grid-column:span 2">🔑 Apply Manual Answer Key</button>
 <button id="bankBtn" class="secondary" style="grid-column:span 2">🗂 Question Bank</button>
 <button id="adminBtn" class="secondary" style="grid-column:span 2">📊 Teacher Dashboard</button>
@@ -96,16 +100,26 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 </section>
 
 <section id="importPage" class="card hidden">
-<h2>Import Questions (JSON)</h2>
+<h2>Import Questions</h2>
 <label>Default subject</label>
 <select id="importSubject">
 <option>Physics</option><option>Chemistry</option><option>Biology</option><option>Mathematics</option><option>English</option><option>General</option>
 </select>
 <label>Default set name</label><input id="importSet" placeholder="e.g. Physics Test 1">
 <label>Default topic</label><input id="importTopic" placeholder="e.g. Mechanics">
+
+<hr>
+<h3>Option 1: Upload a File (PDF, DOCX, TXT)</h3>
+<p class="small">Upload a document with numbered questions (e.g., "1. What is..." and "A) Option").</p>
+<input type="file" id="fileUpload" accept=".json,.txt,.pdf,.docx">
+<button id="uploadFileBtn" class="secondary">Upload & Import File</button>
+
+<hr>
+<h3>Option 2: Paste JSON</h3>
 <label>Paste JSON</label><textarea id="jsonText" placeholder='[{"question":"5+6?","options":["8","5","11","9"],"answer":"C"}]'></textarea>
-<button id="importJson">Import Questions Online</button>
-<p id="importMessage" class="small"></p>
+<button id="importJson">Import Pasted JSON</button>
+
+<p id="importMessage" class="small" style="color:#19d3c5;"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
@@ -178,15 +192,16 @@ const db=firebase.firestore();
 const auth=firebase.auth();
 const $=id=>document.getElementById(id);
 const pages=['loginPage','menuPage','addPage','importPage','keyPage','bankPage','adminPage','quizPage','resultPage'];
-let questions=[],student={name:'',school:''},quiz=[],answers=[],index=0,mode='',seconds=0,timerId=null,examMinutes=30;
+let questions=[],student={name:'',school:''},quiz=[],answers=[],index=0,mode='',seconds=0,timerId=null;
 
-let examStartTime = null; 
-let examFinishTime = null;
+let examStartTime = null, examFinishTime = null;
+let currentExamSubject = 'All', currentExamSet = 'All', currentExamTopic = 'All';
 
 const AI_KEY='smartExamOpenRouterKey';
 const normSubject=s=>['Physics','Chemistry','Biology','Mathematics','English','General'].includes(s)?s:'General';
 const normSet=s=>String(s||'').trim()||'Default Set';
 const normTopic=s=>String(s||'').trim()||'General';
+
 function normAnswer(a){
   if(a===null||a===undefined||a==='')return null;
   if(typeof a==='number'&&a>=0&&a<=3)return a;
@@ -331,6 +346,112 @@ $('importJson').onclick=async()=>{
   }
 };
 
+/* ================= FILE UPLOAD LOGIC ================= */
+function parseDocumentQuestions(rawText, defaultSubject){
+  if(!rawText) throw Error("No text found.");
+  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
+  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
+  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
+  
+  const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
+  const answerKey = Object.create(null);
+  const questionChunks = [];
+  let current = null;
+  let readingAnswerKey = false;
+
+  const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
+  const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
+  const answerLine = /^(?:correct\s+)?answer\s*(?:for\s*(?:question\s*)?)?(\d{1,4})?\s*[:\-.)]?\s*([A-D]|[0-3])\s*$/i;
+  const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
+  const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
+
+  for(const line of lines){
+    if(keyHeader.test(line)){ if(current){questionChunks.push(current);current=null;} readingAnswerKey = true; continue; }
+    if(readingAnswerKey){
+      const k = keyItem.exec(line);
+      if(k){ answerKey[Number(k[1])] = normAnswer(k[2]); continue; }
+      readingAnswerKey = false;
+    }
+    const qMatch = questionStart.exec(line);
+    if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
+    if(!current) continue;
+    const opt = optionLine.exec(line);
+    if(opt){ current.options[opt[1].toUpperCase().charCodeAt(0)-65] = opt[2].trim().substring(0,150); continue; }
+    const inlineAnswer = answerLine.exec(line);
+    if(inlineAnswer){ current.answer = normAnswer(inlineAnswer[2]); continue; }
+    current.parts.push(line);
+  }
+  if(current) questionChunks.push(current);
+
+  const imported = [];
+  for(const item of questionChunks){
+    if(item.options.length !== 4 || item.options.some(o => !o)) continue;
+    const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
+    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: item.options, answer: answer, explanation: "", subject: defaultSubject });
+  }
+  return imported;
+}
+
+async function extractFileText(file){
+  if(file.name.match(/\.(json|txt)$/i)) return await file.text();
+  if(file.name.match(/\.pdf$/i)){
+    const buffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
+    let fullText = "";
+    for(let p=1; p<=pdf.numPages; p++) fullText += "\n" + (await (await pdf.getPage(p)).getTextContent()).items.map(i=>i.str).join(" ") + "\n";
+    return fullText;
+  }
+  if(file.name.match(/\.docx$/i)){
+    const buffer = await file.arrayBuffer();
+    return (await mammoth.extractRawText({arrayBuffer:buffer})).value || "";
+  }
+  throw Error("Unsupported file.");
+}
+
+$('uploadFileBtn').onclick = async function() {
+  const file = $('fileUpload').files[0];
+  if(!file) { $('importMessage').textContent = "Please choose a file first."; return; }
+  $('importMessage').textContent = "Reading file...";
+  
+  try {
+    const rawText = await extractFileText(file);
+    let data = [];
+    
+    if(file.name.match(/\.json$/i)){
+      data = JSON.parse(rawText);
+    } else {
+      data = parseDocumentQuestions(rawText, $('importSubject').value);
+    }
+    
+    if(!Array.isArray(data) || data.length === 0) throw Error("No questions detected. Make sure numbers and A-D options are clearly separated.");
+
+    let batch = db.batch(), valid = 0;
+    for(const q of data){
+      if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) continue;
+      let ref = db.collection('questions').doc();
+      batch.set(ref, {
+        question: String(q.question), 
+        options: q.options.map(String), 
+        answer: normAnswer(q.answer), 
+        explanation: String(q.explanation||''), 
+        subject: normSubject(q.subject || $('importSubject').value), 
+        setName: normSet(q.setName || $('importSet').value || file.name.replace(/\.[^/.]+$/, "")), 
+        topic: normTopic(q.topic || $('importTopic').value)
+      });
+      valid++;
+    }
+    
+    if(!valid) throw Error("No valid questions found. Ensure text format is: 1. Question? A) ... B) ...");
+    
+    await batch.commit();
+    $('importMessage').textContent = `✅ Imported ${valid} questions from file successfully!`;
+    $('fileUpload').value = "";
+  } catch(e) {
+    $('importMessage').textContent = "Error importing file: " + e.message;
+  }
+};
+/* ================================================= */
+
 $('applyKey').onclick=async()=>{
   let set=normSet($('keySet').value),sub=$('keySubject').value,text=$('keyText').value,mp={};
   const re=/(\d+)\s*[.)\-:]?\s*([A-D])/gi;
@@ -375,6 +496,7 @@ function renderBank(){
 async function startQuiz(type){
   let sub=$('quizSubject').value,set=$('quizSet').value,topic=$('quizTopic').value,limit=parseInt($('examLimit').value,10);
   let list=questions.filter(q=>(sub==='All'||q.subject===sub)&&(set==='All'||(q.setName||'Default Set')===set)&&(topic==='All'||(q.topic||'General')===topic));
+  
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
   list=list.slice().sort(()=>Math.random()-.5);
@@ -383,6 +505,12 @@ async function startQuiz(type){
   quiz=list;
   answers=new Array(list.length).fill(null);
   index=0;
+  
+  // Save chosen filters for the result page
+  currentExamSubject = sub;
+  currentExamSet = set;
+  currentExamTopic = topic;
+
   $('quizHeading').textContent=type==='exam'?'Examination':'Practice Mode';
   $('submitBtn').classList.toggle('hidden',type!=='exam');
   if(timerId)clearInterval(timerId);
@@ -509,7 +637,10 @@ async function finishQuiz(){
           percentage:pct,
           startTime: examStartTime ? examStartTime.toISOString() : null,
           finishTime: examFinishTime.toISOString(),
-          date:new Date().toISOString() 
+          date:new Date().toISOString(),
+          examSubject: currentExamSubject,
+          examSet: currentExamSet,
+          examTopic: currentExamTopic
       });
       savedSuccessfully = true;
     }catch(e){
@@ -526,25 +657,15 @@ async function finishQuiz(){
           
           let currentRank = 1, tieCount = 0, prevPct = -1;
           allResults.forEach(r => {
-              if (r.percentage === prevPct) {
-                  tieCount++;
-              } else {
-                  currentRank += tieCount;
-                  tieCount = 1;
-                  prevPct = r.percentage;
-              }
+              if (r.percentage === prevPct) { tieCount++; } 
+              else { currentRank += tieCount; tieCount = 1; prevPct = r.percentage; }
               r.rank = currentRank;
           });
           
           let myResult = allResults.find(r => r.studentName === student.name && r.finishTime === examFinishTime.toISOString());
-          if(myResult) {
-              $('studentRank').innerHTML = `🏆 Your Rank: #${myResult.rank}`;
-          } else {
-              $('studentRank').innerHTML = "";
-          }
+          if(myResult) $('studentRank').innerHTML = `🏆 Your Rank: #${myResult.rank}`;
       } catch(e) {
           console.log("Rank calc error", e);
-          $('studentRank').innerHTML = "";
       }
   }
 
@@ -558,35 +679,33 @@ async function finishQuiz(){
 $('menuResultBtn').onclick=()=>showPage('menuPage');
 document.querySelectorAll('.backBtn').forEach(b=>b.onclick=()=>showPage('menuPage'));
 
+/* ================= TEACHER PIN CHANGED HERE ================= */
 $('adminBtn').onclick=()=>{
   let pin=prompt('Enter Teacher PIN:');
-  if(pin==='1234')showPage('adminPage');
+  if(pin==='45678')showPage('adminPage');
   else if(pin!==null)alert('Incorrect PIN.')
 };
+/* ============================================================ */
+
 $('refreshResults').onclick=loadResults;
 
-// NEW: Delete Single Result Function
 window.deleteSingleResult = async function(id) {
     if(confirm("Are you sure you want to delete this student's result?")) {
         try {
             await db.collection('results').doc(id).delete();
-            loadResults(); // Refresh the list
+            loadResults();
         } catch(e) {
             alert("Error deleting result: " + e.message);
         }
     }
 };
 
-// NEW: Clear All Results Function
 $('clearAllResultsBtn').onclick = async () => {
     if(!confirm("⚠️ WARNING: This will permanently delete ALL student results from the cloud. Are you sure?")) return;
-    
     try {
         const snapshot = await db.collection('results').get();
         const batch = db.batch();
-        snapshot.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
+        snapshot.docs.forEach((doc) => batch.delete(doc.ref));
         await batch.commit();
         loadResults();
     } catch(e) {
@@ -599,24 +718,15 @@ async function loadResults(){
   box.innerHTML='<p class="small">Loading results...</p>';
   try{
     let snap=await db.collection('results').get();
-    if(snap.empty){
-        box.innerHTML='<p class="small">No results yet.</p>';
-        return;
-    }
+    if(snap.empty){ box.innerHTML='<p class="small">No results yet.</p>'; return; }
     
-    let results = snap.docs.map(d => ({ id: d.id, ...d.data() })); // Keep the document ID
-    
+    let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     results.sort((a, b) => b.percentage - a.percentage);
     
     let currentRank = 1, tieCount = 0, prevPct = -1;
     results.forEach(r => {
-        if (r.percentage === prevPct) {
-            tieCount++;
-        } else {
-            currentRank += tieCount;
-            tieCount = 1;
-            prevPct = r.percentage;
-        }
+        if (r.percentage === prevPct) tieCount++;
+        else { currentRank += tieCount; tieCount = 1; prevPct = r.percentage; }
         r.rank = currentRank;
     });
 
@@ -629,14 +739,17 @@ async function loadResults(){
       
       let startStr = r.startTime ? new Date(r.startTime).toLocaleTimeString() : 'N/A';
       let finishStr = r.finishTime ? new Date(r.finishTime).toLocaleTimeString() : new Date(r.date).toLocaleTimeString();
+      
+      let details = `Sub: ${r.examSubject || 'All'} | Set: ${r.examSet || 'All'} | Topic: ${r.examTopic || 'All'}`;
 
       div.innerHTML=`<strong>${esc(r.studentName)} (${esc(r.school)})</strong>
       <div style="margin: 5px 0; font-weight: bold; color: #ff9800;">🏆 Rank: #${r.rank}</div>
       <p>Score: ${r.score}/${r.total} · ${r.percentage}%</p>
+      <p class="small" style="color:#3988ff; font-weight:bold;">${details}</p>
       <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>
       <button class="danger del-btn" onclick="window.deleteSingleResult('${r.id}')">Delete</button>`;
       
-      box.appendChild(div)
+      box.appendChild(box)
     })
   }catch(e){
     box.textContent='Results error: '+e.message
