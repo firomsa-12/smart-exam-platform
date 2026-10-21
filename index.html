@@ -225,7 +225,6 @@ auth.signInAnonymously().then(()=>{
 });
 
 db.collection('questions').onSnapshot(s=>{
-  // Sort by sequence number, or createdAt if sequence is missing
   questions = s.docs.map(d=>({id:d.id,...d.data(),answer:normAnswer(d.data().answer)}))
     .sort((a, b) => {
         let seqA = a.sequence !== undefined ? a.sequence : new Date(a.createdAt || 0).getTime();
@@ -341,9 +340,10 @@ $('saveQuestion').onclick=async()=>{
   if(!question||options.some(o=>!o)){$('addMessage').textContent='Complete the question and all four options.';return}
   let ans=$('correct').value;
   let data={
-    question,options,
+    question: String(question),
+    options: options.map(o => String(o || "")), // Ensure string
     answer:ans===''?null:Number(ans),
-    explanation:$('addExplanation').value.trim(),
+    explanation: String($('addExplanation').value.trim()),
     subject:normSubject($('addSubject').value),
     setName:normSet($('addSet').value),
     topic:normTopic($('addTopic').value),
@@ -372,8 +372,8 @@ $('importJson').onclick=async()=>{
       if(!q.question||!Array.isArray(q.options)||q.options.length!==4)continue;
       let ref=db.collection('questions').doc();
       batch.set(ref,{
-        question:String(q.question), 
-        options:q.options.map(String), 
+        question:String(q.question || ""), 
+        options:[0,1,2,3].map(idx => String(q.options[idx] || "")), // Fix: Prevent undefined
         answer:normAnswer(q.answer), 
         explanation:String(q.explanation||''), 
         subject:normSubject(q.subject||$('importSubject').value), 
@@ -431,9 +431,20 @@ function parseDocumentQuestions(rawText, defaultSubject){
 
   const imported = [];
   for(const item of questionChunks){
-    if(item.options.length !== 4 || item.options.some(o => !o)) continue;
+    if(item.options.length !== 4) continue;
+    
+    // Fix: Ensure no sparse arrays or undefined elements
+    let validOpts = [];
+    for(let k=0; k<4; k++) {
+        if(typeof item.options[k] !== 'string' || !item.options[k].trim()) {
+            validOpts = null; break;
+        }
+        validOpts.push(item.options[k].trim());
+    }
+    if(!validOpts) continue; // skip if any option is missing
+
     const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
-    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: item.options, answer: answer, explanation: "", subject: defaultSubject });
+    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: validOpts, answer: answer, explanation: "", subject: defaultSubject });
   }
   return imported;
 }
@@ -478,9 +489,10 @@ $('uploadFileBtn').onclick = async function() {
       let q = data[i];
       if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) continue;
       let ref = db.collection('questions').doc();
+      
       batch.set(ref, {
-        question: String(q.question), 
-        options: q.options.map(String), 
+        question: String(q.question || ""), 
+        options: [0,1,2,3].map(idx => String(q.options[idx] || "")), // Fix: Prevent undefined holes
         answer: normAnswer(q.answer), 
         explanation: String(q.explanation||''), 
         subject: normSubject(q.subject || $('importSubject').value), 
@@ -741,7 +753,7 @@ async function finishQuiz(){
           const snapshot = await db.collection('results').get();
           let allResults = snapshot.docs.map(d => d.data());
           
-          // FIX: ONLY COMPARE RESULTS WITH THE SAME SUBJECT AND SET
+          // ONLY COMPARE RESULTS WITH THE SAME SUBJECT AND SET
           let relevantResults = allResults.filter(r => {
               let matchSub = (currentExamSubject === 'All' || r.examSubject === currentExamSubject);
               let matchSet = (currentExamSet === 'All' || r.examSet === currentExamSet);
@@ -815,7 +827,7 @@ async function loadResults(){
     
     let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     
-    // FIX: Calculate rank by grouping by Subject + Set
+    // Calculate rank by grouping by Subject + Set
     let groups = {};
     results.forEach(r => {
         let key = `${r.examSubject || 'All'}_${r.examSet || 'All'}`;
