@@ -36,6 +36,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <body>
 <div class="container">
 <header><h1>🎓 SMART EXAM PLATFORM</h1></header>
+
 <section id="loginPage" class="card">
 <h2>Student Login</h2>
 <label>Student Name</label><input id="studentName" placeholder="Enter your full name">
@@ -49,14 +50,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <p id="welcome"></p>
 <div class="info">Total Questions available online: <strong id="count">0</strong></div>
 <p id="cloudStatus" class="small">Connecting to Firebase...</p>
-
-<div class="info">
-<h3 style="color:#19d3c5">🤖 Free AI Setup (OpenRouter)</h3>
-<p class="small">Paste your Free OpenRouter API Key (sk-or-v1-...). It is stored locally on this device.</p>
-<input id="mainAiKey" type="password" placeholder="sk-or-v1-...">
-<button id="saveAiKey" class="secondary">Save AI Key</button>
-<p id="aiStatus" class="small"></p>
-</div>
 
 <label>Subject</label>
 <select id="quizSubject">
@@ -76,7 +69,7 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="importBtn" class="secondary">📥 Import JSON</button>
 <button id="keyBtn" class="secondary" style="grid-column:span 2">🔑 Apply Manual Answer Key</button>
 <button id="bankBtn" class="secondary" style="grid-column:span 2">🗂 Question Bank</button>
-<button id="adminBtn" class="secondary" style="grid-column:span 2">📊 Teacher Results</button>
+<button id="adminBtn" class="secondary" style="grid-column:span 2">📊 Teacher Dashboard</button>
 </div>
 </section>
 
@@ -133,11 +126,22 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
+<!-- TEACHER DASHBOARD WITH AI SETUP -->
 <section id="adminPage" class="card hidden">
-<h2>📊 Teacher Results</h2>
+<h2>📊 Teacher Dashboard</h2>
+
+<div class="info" style="border: 1px solid #19d3c5;">
+<h3 style="color:#19d3c5; margin-top: 0;">🤖 AI Setup</h3>
+<p class="small">Paste your Free OpenRouter API Key (sk-or-v1-...). Saved locally on this phone.</p>
+<input id="mainAiKey" type="password" placeholder="sk-or-v1-...">
+<button id="saveAiKey" class="secondary">Save AI Key</button>
+<p id="aiStatus" class="small"></p>
+</div>
+
+<h3>📈 Student Results</h3>
 <button id="refreshResults" class="secondary">Refresh Results</button>
 <div id="resultsContainer"></div>
-<button class="backBtn secondary">← Back to Menu</button>
+<button class="backBtn secondary" style="margin-top: 20px;">← Back to Menu</button>
 </section>
 
 <section id="quizPage" class="card hidden">
@@ -232,7 +236,7 @@ $('saveAiKey').onclick=()=>{
 async function askAI(q){
   let key='';
   try{key=localStorage.getItem(AI_KEY)||''}catch(e){}
-  if(!key)throw Error('Add your OpenRouter API key on the dashboard first.');
+  if(!key)throw Error('Add your OpenRouter API key in the Teacher Dashboard first.');
   const prompt=`Solve this multiple-choice educational question carefully. Return ONLY valid JSON: {"answer":"A","explanation":"brief explanation"}. If the options do not contain a clear answer, choose the best option and say uncertainty in explanation.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
   const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',
@@ -243,7 +247,7 @@ async function askAI(q){
       'X-Title':'Smart Exam Platform'
     },
     body:JSON.stringify({
-      model:'openrouter/free', // USING THE ROUTER FOR STABILITY
+      model:'openrouter/free', 
       messages:[{role:'user',content:prompt}],
       temperature:0
     })
@@ -263,19 +267,6 @@ async function askAI(q){
   let answer=normAnswer(parsed.answer);
   if(answer===null)throw Error('AI did not return A, B, C, or D.');
   return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
-}
-
-async function ensureAnswers(list,showProgress){
-  let missing=list.filter(q=>q.answer===null||q.answer===undefined);
-  for(let n=0;n<missing.length;n++){
-    if(showProgress)showProgress(n+1,missing.length);
-    let q=missing[n];
-    let result=await askAI(q);
-    q.answer=result.answer;
-    q.explanation=result.explanation;
-    await db.collection('questions').doc(q.id).update({answer:result.answer,explanation:result.explanation})
-  }
-  return true
 }
 
 function refreshDropdowns(){
@@ -394,21 +385,6 @@ async function startQuiz(type){
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
   list=list.slice().sort(()=>Math.random()-.5);
-  if(type==='exam'&&list.some(q=>q.answer===null||q.answer===undefined)){
-    let ok=confirm('Some questions have no manual answer. Use AI to generate missing answers before the exam starts?');
-    if(!ok)return;
-    try{
-      $('cloudStatus').textContent='AI is preparing missing answers. Please wait...';
-      await ensureAnswers(list,(n,total)=>{
-        $('cloudStatus').textContent=`AI preparing answers: ${n}/${total}`
-      });
-      $('cloudStatus').textContent='All missing answers have been generated and saved.'
-    }catch(e){
-      $('cloudStatus').textContent='AI error: '+e.message;
-      alert('Could not prepare exam answers: '+e.message);
-      return
-    }
-  }
   mode=type;
   quiz=list;
   answers=new Array(list.length).fill(null);
@@ -443,7 +419,9 @@ window.selectAnswer=async j=>{
         let r=await askAI(q);
         q.answer=r.answer;
         q.explanation=r.explanation;
-        if(q.id)await db.collection('questions').doc(q.id).update({answer:r.answer,explanation:r.explanation});
+        if(q.id) {
+            await db.collection('questions').doc(q.id).update({answer:r.answer,explanation:r.explanation}).catch(e => console.log("DB Save Error:", e));
+        }
         showFeedback()
       }catch(e){
         $('quizMessage').textContent='AI Error: '+e.message;
