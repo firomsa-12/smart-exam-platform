@@ -31,6 +31,7 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
+.rank-badge { text-align: center; font-size: 22px; font-weight: bold; color: #ff9800; margin: 10px 0; }
 </style>
 </head>
 <body>
@@ -126,10 +127,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
-<!-- TEACHER DASHBOARD WITH AI SETUP -->
 <section id="adminPage" class="card hidden">
 <h2>📊 Teacher Dashboard</h2>
-
 <div class="info" style="border: 1px solid #19d3c5;">
 <h3 style="color:#19d3c5; margin-top: 0;">🤖 AI Setup</h3>
 <p class="small">Paste your Free OpenRouter API Key (sk-or-v1-...). Saved locally on this phone.</p>
@@ -137,7 +136,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="saveAiKey" class="secondary">Save AI Key</button>
 <p id="aiStatus" class="small"></p>
 </div>
-
 <h3>📈 Student Results</h3>
 <button id="refreshResults" class="secondary">Refresh Results</button>
 <div id="resultsContainer"></div>
@@ -160,6 +158,8 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <div id="resultStudent" class="info"></div>
 <h1 id="score" style="text-align:center"></h1>
 <p id="percentage" style="text-align:center;font-size:20px"></p>
+<div id="studentRank" class="rank-badge"></div>
+<div id="timeTrack" class="info small" style="text-align:center;"></div>
 <div id="review"></div>
 <button id="menuResultBtn">Return to Menu</button>
 </section>
@@ -175,6 +175,10 @@ const auth=firebase.auth();
 const $=id=>document.getElementById(id);
 const pages=['loginPage','menuPage','addPage','importPage','keyPage','bankPage','adminPage','quizPage','resultPage'];
 let questions=[],student={name:'',school:''},quiz=[],answers=[],index=0,mode='',seconds=0,timerId=null,examMinutes=30;
+
+let examStartTime = null; 
+let examFinishTime = null;
+
 const AI_KEY='smartExamOpenRouterKey';
 const normSubject=s=>['Physics','Chemistry','Biology','Mathematics','English','General'].includes(s)?s:'General';
 const normSet=s=>String(s||'').trim()||'Default Set';
@@ -240,17 +244,8 @@ async function askAI(q){
   const prompt=`Solve this multiple-choice educational question carefully. Return ONLY valid JSON: {"answer":"A","explanation":"brief explanation"}. If the options do not contain a clear answer, choose the best option and say uncertainty in explanation.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
   const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
     method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'Authorization':'Bearer '+key,
-      'HTTP-Referer':location.origin,
-      'X-Title':'Smart Exam Platform'
-    },
-    body:JSON.stringify({
-      model:'openrouter/free', 
-      messages:[{role:'user',content:prompt}],
-      temperature:0
-    })
+    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key,'HTTP-Referer':location.origin,'X-Title':'Smart Exam Platform'},
+    body:JSON.stringify({model:'openrouter/free', messages:[{role:'user',content:prompt}],temperature:0})
   });
   let data;
   try{data=await res.json()}catch(e){throw Error('AI returned an unreadable response.')}
@@ -319,13 +314,7 @@ $('importJson').onclick=async()=>{
       if(!q.question||!Array.isArray(q.options)||q.options.length!==4)continue;
       let ref=db.collection('questions').doc();
       batch.set(ref,{
-        question:String(q.question),
-        options:q.options.map(String),
-        answer:normAnswer(q.answer),
-        explanation:String(q.explanation||''),
-        subject:normSubject(q.subject||$('importSubject').value),
-        setName:normSet(q.setName||$('importSet').value),
-        topic:normTopic(q.topic||$('importTopic').value)
+        question:String(q.question), options:q.options.map(String), answer:normAnswer(q.answer), explanation:String(q.explanation||''), subject:normSubject(q.subject||$('importSubject').value), setName:normSet(q.setName||$('importSet').value), topic:normTopic(q.topic||$('importTopic').value)
       });
       valid++
     }
@@ -385,6 +374,7 @@ async function startQuiz(type){
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
   list=list.slice().sort(()=>Math.random()-.5);
+  
   mode=type;
   quiz=list;
   answers=new Array(list.length).fill(null);
@@ -392,7 +382,9 @@ async function startQuiz(type){
   $('quizHeading').textContent=type==='exam'?'Examination':'Practice Mode';
   $('submitBtn').classList.toggle('hidden',type!=='exam');
   if(timerId)clearInterval(timerId);
+  
   if(type==='exam'){
+    examStartTime = new Date(); // Record Start Time
     seconds=30*60;
     $('timer').textContent='Time Left: 30:00';
     timerId=setInterval(()=>{
@@ -401,6 +393,7 @@ async function startQuiz(type){
       if(seconds<=0)finishQuiz()
     },1000)
   }else $('timer').textContent='Practice Mode';
+  
   showPage('quizPage');
   renderQ()
 }
@@ -473,11 +466,14 @@ $('quitBtn').onclick=()=>{
   if(mode==='exam'&&!confirm('Quit exam? Your progress will be lost.'))return;
   if(timerId)clearInterval(timerId);
   mode='';
+  examStartTime = null; 
   showPage('menuPage')
 };
 
 async function finishQuiz(){
   if(timerId)clearInterval(timerId);
+  examFinishTime = new Date(); 
+  
   let score=0,total=0;
   quiz.forEach((q,i)=>{
     if(q.answer!==null&&q.answer!==undefined){
@@ -486,18 +482,80 @@ async function finishQuiz(){
     }
   });
   let pct=total?Math.round(score/total*100):0;
+  
   $('resultStudent').textContent=`Student: ${student.name} · School: ${student.school}`;
   $('score').textContent=total?`Score: ${score} / ${total}`:'No answer key';
   $('percentage').textContent=total?`Percentage: ${pct}%`:'Ungraded';
-  $('review').innerHTML=quiz.map((q,i)=>`<div class="question"><p><strong>Q${i+1}: ${esc(q.question)}</strong></p><p class="small">Your answer: ${answers[i]===null?'None':'ABCD'[answers[i]]}</p><p class="small">Correct answer: ${q.answer===null?'None':'ABCD'[q.answer]}</p>${q.explanation?`<div class="explanation-box">${esc(q.explanation)}</div>`:''}</div>`).join('');
+  
+  let timeString = "";
+  if (mode === 'exam' && examStartTime) {
+      timeString = `Started: ${examStartTime.toLocaleTimeString()} <br> Finished: ${examFinishTime.toLocaleTimeString()}`;
+  }
+  $('timeTrack').innerHTML = timeString;
+  $('studentRank').innerHTML = ""; // Clear previous rank
+
+  // Save result to DB first to include in ranking
+  let savedSuccessfully = false;
   if(mode==='exam'&&total){
     try{
-      await db.collection('results').add({studentName:student.name,school:student.school,score,total,percentage:pct,date:new Date().toISOString()})
+      await db.collection('results').add({
+          studentName:student.name,
+          school:student.school,
+          score:score,
+          total:total,
+          percentage:pct,
+          startTime: examStartTime ? examStartTime.toISOString() : null,
+          finishTime: examFinishTime.toISOString(),
+          date:new Date().toISOString() 
+      });
+      savedSuccessfully = true;
     }catch(e){
-      alert('Could not save result online: '+e.message)
+      console.log('Could not save result online: '+e.message);
     }
   }
+
+  // Calculate Rank
+  if(mode==='exam' && total && savedSuccessfully) {
+      $('studentRank').textContent = "Calculating rank...";
+      try {
+          const snapshot = await db.collection('results').get();
+          let allResults = snapshot.docs.map(d => d.data());
+          
+          // Sort descending by percentage
+          allResults.sort((a, b) => b.percentage - a.percentage);
+          
+          // Calculate ties
+          let currentRank = 1, tieCount = 0, prevPct = -1;
+          allResults.forEach(r => {
+              if (r.percentage === prevPct) {
+                  tieCount++;
+              } else {
+                  currentRank += tieCount;
+                  tieCount = 1;
+                  prevPct = r.percentage;
+              }
+              r.rank = currentRank;
+          });
+          
+          // Find this specific student's result
+          // We match exact percentage and finishTime since we just added it
+          let myResult = allResults.find(r => r.studentName === student.name && r.finishTime === examFinishTime.toISOString());
+          
+          if(myResult) {
+              $('studentRank').innerHTML = `🏆 Your Rank: #${myResult.rank}`;
+          } else {
+              $('studentRank').innerHTML = "";
+          }
+      } catch(e) {
+          console.log("Rank calc error", e);
+          $('studentRank').innerHTML = "";
+      }
+  }
+
+  $('review').innerHTML=quiz.map((q,i)=>`<div class="question"><p><strong>Q${i+1}: ${esc(q.question)}</strong></p><p class="small">Your answer: ${answers[i]===null?'None':'ABCD'[answers[i]]}</p><p class="small">Correct answer: ${q.answer===null?'None':'ABCD'[q.answer]}</p>${q.explanation?`<div class="explanation-box">${esc(q.explanation)}</div>`:''}</div>`).join('');
+  
   mode='';
+  examStartTime = null; 
   showPage('resultPage')
 }
 
@@ -515,13 +573,47 @@ async function loadResults(){
   let box=$('resultsContainer');
   box.innerHTML='<p class="small">Loading results...</p>';
   try{
-    let snap=await db.collection('results').orderBy('date','desc').get();
+    let snap=await db.collection('results').get();
+    if(snap.empty){
+        box.innerHTML='<p class="small">No results yet.</p>';
+        return;
+    }
+    
+    let results = snap.docs.map(d => d.data());
+    
+    // Sort descending by percentage for ranking
+    results.sort((a, b) => b.percentage - a.percentage);
+    
+    // Calculate ties
+    let currentRank = 1, tieCount = 0, prevPct = -1;
+    results.forEach(r => {
+        if (r.percentage === prevPct) {
+            tieCount++;
+        } else {
+            currentRank += tieCount;
+            tieCount = 1;
+            prevPct = r.percentage;
+        }
+        r.rank = currentRank;
+    });
+
+    // We also want to display the newest at the top, so let's sort by date for display
+    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+
     box.innerHTML='';
-    if(snap.empty){box.textContent='No results yet.';return}
-    snap.forEach(d=>{
-      let r=d.data(),div=document.createElement('div');
+    results.forEach(r => {
+      let div=document.createElement('div');
       div.className='question';
-      div.innerHTML=`<strong>${esc(r.studentName)} (${esc(r.school)})</strong><p>Score: ${r.score}/${r.total} · ${r.percentage}%</p><p class="small">${esc(new Date(r.date).toLocaleString())}</p>`;
+      
+      let startStr = r.startTime ? new Date(r.startTime).toLocaleTimeString() : 'N/A';
+      let finishStr = r.finishTime ? new Date(r.finishTime).toLocaleTimeString() : new Date(r.date).toLocaleTimeString();
+
+      // Display rank prominently
+      div.innerHTML=`<strong>${esc(r.studentName)} (${esc(r.school)})</strong>
+      <div style="margin: 5px 0; font-weight: bold; color: #ff9800;">🏆 Rank: #${r.rank}</div>
+      <p>Score: ${r.score}/${r.total} · ${r.percentage}%</p>
+      <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>`;
+      
       box.appendChild(div)
     })
   }catch(e){
