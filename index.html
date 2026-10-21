@@ -149,7 +149,6 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <button id="saveAiKey" class="secondary">Save AI Key</button>
 <p id="aiStatus" class="small"></p>
 
-<!-- NEW: BULK GENERATE BUTTON -->
 <hr style="border-color: #2b405f;">
 <button id="bulkGenerateBtn" style="background: #ff9800; color: white;">✨ Auto-Generate Missing Answers for All Questions</button>
 <p id="bulkGenStatus" class="small" style="color:#19d3c5;"></p>
@@ -287,7 +286,6 @@ async function askAI(q){
   return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
 }
 
-// NEW: BULK GENERATE FOR TEACHER
 $('bulkGenerateBtn').onclick = async function() {
     let key = localStorage.getItem(AI_KEY);
     if(!key) { alert("Please save your AI Key first."); return; }
@@ -307,7 +305,7 @@ $('bulkGenerateBtn').onclick = async function() {
         } catch(e) {
             console.error("Failed on question", missing[i].id, e);
         }
-        await new Promise(resolve => setTimeout(resolve, 500)); // Prevent API rate limit
+        await new Promise(resolve => setTimeout(resolve, 500));
     }
     
     $('bulkGenStatus').textContent = `✅ Finished! Generated ${success} answers out of ${missing.length}.`;
@@ -515,7 +513,13 @@ function renderBank(){
     b.className='danger';
     b.textContent='Delete from Cloud';
     b.onclick=async()=>{
-      if(confirm('Delete this question permanently?'))await db.collection('questions').doc(q.id).delete()
+      if(confirm('Delete this question permanently?')) {
+          try {
+              await db.collection('questions').doc(q.id).delete();
+          } catch(e) {
+              alert("Error deleting question: " + e.message);
+          }
+      }
     };
     div.appendChild(b);
     box.appendChild(div)
@@ -529,7 +533,6 @@ async function startQuiz(type){
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
   
-  // NEW: Auto-generate missing answers before exam
   if(type==='exam' && list.some(q => q.answer === null || q.answer === undefined)){
       let ok = confirm("Some questions have no manual answer. Use AI to generate missing answers before the exam starts?");
       if(!ok) return;
@@ -799,7 +802,7 @@ async function loadResults(){
       <p class="small" style="color:#19d3c5;">Started: ${startStr} <br> Finished: ${finishStr}</p>
       <button class="danger del-btn" onclick="window.deleteSingleResult('${r.id}')">Delete</button>`;
       
-      box.appendChild(div) // FIXED BUG HERE
+      box.appendChild(div); // FIXED BUG HERE
     })
   }catch(e){
     box.textContent='Results error: '+e.message
