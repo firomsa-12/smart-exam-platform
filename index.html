@@ -325,10 +325,10 @@ async function askAI(q){
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
     body:JSON.stringify({
-      model: "llama-3.1-8b-instant", // FASTEST MODEL
+      model: "llama3-8b-8192", // STABLE FAST MODEL
       messages: [{ role: "user", content: prompt }],
       temperature: 0,
-      response_format: { type: "json_object" } // Forces instant, perfectly formatted JSON
+      response_format: { type: "json_object" }
     })
   });
   
@@ -348,7 +348,6 @@ async function askAI(q){
   return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
 }
 
-// Turns the **asterisks** into bold text and puts it in the blue box
 function formatExplanation(text) {
     if (!text) return "";
     let formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>'); 
