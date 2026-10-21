@@ -4,19 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Smart Exam Platform</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
-
-<!-- FIREBASE SCRIPTS -->
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
-
 <style>
 *{box-sizing:border-box}
 body{margin:0;padding:16px;background:#081225;color:#f0f5ff;font-family:Arial,sans-serif}
 .container{max-width:750px;margin:auto}
-header{text-align:center;padding:20px 0}
+header{text-align:center;padding:12px 0}
 h1,h2{color:#19d3c5}
 .card{background:#111f38;border:1px solid #2b405f;border-radius:14px;padding:20px;margin-bottom:16px}
 label{display:block;margin:14px 0 6px;color:#b9c9df}
@@ -27,171 +22,122 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 .danger{background:#ff6577;color:white}
 .hidden{display:none!important}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.info{background:#192b48;padding:12px;border-radius:8px;margin:12px 0;line-height:1.5}
-.option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0; cursor:pointer;}
-.option input{width:auto}
+.info,.question{background:#192b48;padding:12px;border-radius:8px;margin:12px 0;line-height:1.5}
 .small{color:#b9c9df;font-size:13px;line-height:1.5}
 .timer{text-align:center;color:#19d3c5;font-size:24px;font-weight:bold;margin:15px}
-.question{background:#192b48;padding:15px;border-radius:10px;margin:12px 0}
+.option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0;cursor:pointer}
+.option input{width:auto}
+.explanation-box{background:#1d3557;padding:10px;border-radius:6px;margin-top:10px;border-left:4px solid #19d3c5;color:#e0f2fe}
 hr{border:0;border-top:1px solid #38506e;margin:20px 0}
 @media(max-width:450px){.grid{grid-template-columns:1fr}}
 a{color:#19d3c5;overflow-wrap:anywhere}
-#loadingData { text-align:center; color:#19d3c5; font-weight:bold; margin:20px; }
-.result-card { background: #192b48; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 5px solid #19d3c5; }
-.result-card.fail { border-left-color: #ff6577; }
-.result-card.pass { border-left-color: #ff9800; }
-.result-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; color: #fff; }
-.explanation-box { background: #1d3557; padding: 10px; border-radius: 6px; margin-top: 10px; border-left: 4px solid #19d3c5; font-style: italic; color: #e0f2fe; }
 </style>
 </head>
 <body>
 <div class="container">
-<header>
-<h1>🎓 SMART EXAM PLATFORM</h1>
-</header>
-
+<header><h1>🎓 SMART EXAM PLATFORM</h1></header>
 <section id="loginPage" class="card">
 <h2>Student Login</h2>
-<label>Student Name</label>
-<input id="studentName" placeholder="Enter your full name">
-<label>School Name</label>
-<input id="schoolName" placeholder="Enter your school name">
-<button id="continueBtn" type="button">Continue →</button>
+<label>Student Name</label><input id="studentName" placeholder="Enter your full name">
+<label>School Name</label><input id="schoolName" placeholder="Enter your school name">
+<button id="continueBtn">Continue →</button>
 <p id="loginMessage" class="small"></p>
 </section>
 
 <section id="menuPage" class="card hidden">
 <h2>Student Dashboard</h2>
 <p id="welcome"></p>
-<div class="info">Total Questions available (Cloud): <strong id="count">0</strong></div>
-<div id="loadingData" class="hidden">Connecting to Cloud Database...</div>
+<div class="info">Total Questions available online: <strong id="count">0</strong></div>
+<p id="cloudStatus" class="small">Connecting to Firebase...</p>
 
-<div class="info" style="border: 1px solid #19d3c5;">
-    <h3 style="margin-top: 0; color: #19d3c5;">🤖 Free AI Setup (OpenRouter)</h3>
-    <p class="small">Paste your Free OpenRouter API Key (sk-or-v1-...) to enable real-time AI explanations in Practice Mode.</p>
-    <input id="mainAiKey" type="password" placeholder="Paste OpenRouter API Key (sk-or-v1-...)">
-    <button id="saveMainAiKeyBtn" class="secondary" type="button">Save AI Key</button>
-    <p id="mainAiStatus" class="small" style="color:#19d3c5;"></p>
+<div class="info">
+<h3 style="color:#19d3c5">🤖 Free AI Setup (OpenRouter)</h3>
+<p class="small">Paste your Free OpenRouter API Key (sk-or-v1-...). It is stored locally on this device.</p>
+<input id="mainAiKey" type="password" placeholder="sk-or-v1-...">
+<button id="saveAiKey" class="secondary">Save AI Key</button>
+<p id="aiStatus" class="small"></p>
 </div>
 
-<label for="quizSubject">Subject</label>
+<label>Subject</label>
 <select id="quizSubject">
-<option value="All">All subjects</option>
-<option>Physics</option><option>Chemistry</option><option>Biology</option>
-<option>Mathematics</option><option>English</option><option>General</option>
+<option>All</option><option>Physics</option><option>Chemistry</option><option>Biology</option><option>Mathematics</option><option>English</option><option>General</option>
 </select>
-
-<label for="quizSet">Exam Set (Document)</label>
-<select id="quizSet"><option value="All">All Sets</option></select>
-
-<label for="quizTopic">Topic</label>
-<select id="quizTopic"><option value="All">All topics</option></select>
-
-<label for="examLimit">Number of questions for this session (Leave empty for all)</label>
+<label>Exam Set</label>
+<select id="quizSet"><option>All</option></select>
+<label>Topic</label>
+<select id="quizTopic"><option>All</option></select>
+<label>Number of questions (blank = all)</label>
 <input id="examLimit" type="number" min="1" placeholder="e.g. 20">
 
 <div class="grid">
 <button id="examBtn">📝 Start Examination</button>
 <button id="practiceBtn" class="secondary">📚 Start Practice</button>
-<button id="addBtn" class="secondary">➕ Add Questions</button>
-<button id="importBtn" class="secondary">📥 Import Questions</button>
-<button id="keyBtn" class="secondary" style="grid-column: span 2; background: #ff9800; color: white;">🔑 Apply Answer Key (Manual)</button>
-<button id="bankBtn" class="secondary" style="grid-column: span 2;">🗂 Question Bank</button>
-<button id="adminBtn" class="secondary" style="grid-column: span 2; background: #4caf50; color: white;">📊 Teacher Dashboard</button>
+<button id="addBtn" class="secondary">➕ Add Question</button>
+<button id="importBtn" class="secondary">📥 Import JSON</button>
+<button id="keyBtn" class="secondary" style="grid-column:span 2">🔑 Apply Manual Answer Key</button>
+<button id="bankBtn" class="secondary" style="grid-column:span 2">🗂 Question Bank</button>
+<button id="adminBtn" class="secondary" style="grid-column:span 2">📊 Teacher Results</button>
 </div>
 </section>
 
 <section id="addPage" class="card hidden">
-<h2>Add Questions Manually</h2>
+<h2>Add Question</h2>
 <label>Subject</label>
 <select id="addSubject">
-<option>Physics</option><option>Chemistry</option><option>Biology</option>
-<option>Mathematics</option><option>English</option><option>General</option>
+<option>Physics</option><option>Chemistry</option><option>Biology</option><option>Mathematics</option><option>English</option><option>General</option>
 </select>
-<label>Set Name</label>
-<input id="addSet" placeholder="e.g., Kinematics Manual">
-<label>Topic</label>
-<input id="addTopic" placeholder="e.g., Cell Biology">
-<label>Duration (minutes)</label>
-<input id="duration" type="number" min="1" max="600" value="30">
-<button id="saveDurationBtn" class="secondary">Save Time Limit</button>
-<p id="durationMessage" class="small"></p>
-<hr>
-<label>Question</label>
-<textarea id="qText" placeholder="Enter your question"></textarea>
-<label>Option A</label><input id="a" placeholder="Option A">
-<label>Option B</label><input id="b" placeholder="Option B">
-<label>Option C</label><input id="c" placeholder="Option C">
-<label>Option D</label><input id="d" placeholder="Option D">
-
-<label>Correct answer</label>
+<label>Set name</label><input id="addSet" placeholder="e.g. Physics Test 1">
+<label>Topic</label><input id="addTopic" placeholder="e.g. Mechanics">
+<label>Question</label><textarea id="qText"></textarea>
+<label>Option A</label><input id="a"><label>Option B</label><input id="b"><label>Option C</label><input id="c"><label>Option D</label><input id="d">
+<label>Correct answer (manual)</label>
 <select id="correct">
-<option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
+<option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option><option value="">Not set — AI can answer</option>
 </select>
-<button id="saveQuestionBtn">Save Question to Cloud</button>
+<label>Explanation (optional)</label><textarea id="addExplanation"></textarea>
+<button id="saveQuestion">Save Question Online</button>
 <p id="addMessage" class="small"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
 <section id="importPage" class="card hidden">
-<h2>Import Questions</h2>
-<label>Default subject for imported questions</label>
+<h2>Import Questions (JSON)</h2>
+<label>Default subject</label>
 <select id="importSubject">
-<option>Physics</option><option>Chemistry</option><option>Biology</option>
-<option>Mathematics</option><option>English</option><option>General</option>
+<option>Physics</option><option>Chemistry</option><option>Biology</option><option>Mathematics</option><option>English</option><option>General</option>
 </select>
-
-<label>Document / Set Name</label>
-<input id="importSetName" placeholder="e.g., Kinematics Test 1">
-
-<label>Default Topic</label>
-<input id="importTopic" placeholder="e.g., Cell Biology">
-
-<p class="small">This imports the questions. They will have no answers by default. Use Practice Mode to trigger AI generation, or use the Manual Key.</p>
-<label>Paste JSON questions</label>
-<textarea id="jsonText" placeholder="Paste JSON here"></textarea>
-<button id="importTextBtn">Import Pasted JSON</button>
-<hr>
-<label>Choose a file</label>
-<input type="file" id="jsonFile" accept=".json,.txt,.pdf,.docx">
-<p id="selectedFile" class="small">No file selected.</p>
-<button id="chooseFileBtn" class="secondary" type="button">Choose File</button>
-<button id="importFileBtn" class="secondary" type="button">Import Selected File</button>
+<label>Default set name</label><input id="importSet" placeholder="e.g. Physics Test 1">
+<label>Default topic</label><input id="importTopic" placeholder="e.g. Mechanics">
+<label>Paste JSON</label><textarea id="jsonText" placeholder='[{"question":"5+6?","options":["8","5","11","9"],"answer":"C"}]'></textarea>
+<button id="importJson">Import Questions Online</button>
 <p id="importMessage" class="small"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
 <section id="keyPage" class="card hidden">
-<h2>🔑 Apply Answer Key (Manual)</h2>
-<p class="small">Enter your answer key below (e.g., "1. A, 2. C, 3. B"). The app will find the matching questions and apply the answers.</p>
+<h2>Manual Answer Key</h2>
 <label>Subject</label>
 <select id="keySubject">
-<option>Physics</option><option>Chemistry</option><option>Biology</option>
-<option>Mathematics</option><option>English</option><option>General</option>
+<option>Physics</option><option>Chemistry</option><option>Biology</option><option>Mathematics</option><option>English</option><option>General</option>
 </select>
-<label>Set Name to apply answers to</label>
-<input id="keySetName" placeholder="e.g., Kinematics Test 1">
-<label>Paste Answer Key here</label>
-<textarea id="keyText" placeholder="1. A&#10;2. C&#10;3. B&#10;4. D"></textarea>
-<button id="applyKeyBtn">Apply Answers</button>
-<p id="keyMessage" class="small" style="color:#19d3c5;"></p>
+<label>Set name (must match exactly)</label><input id="keySet">
+<label>Answer key</label><textarea id="keyText" placeholder="1. A&#10;2. C&#10;3. B"></textarea>
+<button id="applyKey">Apply Manual Answers</button>
+<p id="keyMessage" class="small"></p>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
 <section id="bankPage" class="card hidden">
-<h2>Question Bank (Cloud)</h2>
+<h2>Question Bank</h2>
 <div id="bankContent"></div>
 <button class="backBtn secondary">← Back to Menu</button>
 </section>
 
 <section id="adminPage" class="card hidden">
-<h2>📊 Teacher Dashboard</h2>
-<h3>📈 Student Results</h3>
-<button id="refreshResultsBtn" class="secondary">🔄 Refresh Results</button>
-<div id="resultsContainer" style="margin-top: 15px;">
-    <p id="loadingResults" class="small">Loading results...</p>
-</div>
-<button class="backBtn secondary" style="margin-top: 20px;">← Back to Menu</button>
+<h2>📊 Teacher Results</h2>
+<button id="refreshResults" class="secondary">Refresh Results</button>
+<div id="resultsContainer"></div>
+<button class="backBtn secondary">← Back to Menu</button>
 </section>
 
 <section id="quizPage" class="card hidden">
@@ -202,14 +148,14 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 <div id="quizMessage" class="small"></div>
 <button id="nextBtn">Next Question →</button>
 <button id="submitBtn" class="danger hidden">Submit Examination</button>
-<button id="quitBtn" class="secondary" style="margin-top:10px;">🚪 Quit / Back to Menu</button>
+<button id="quitBtn" class="secondary">Quit / Back to Menu</button>
 </section>
 
 <section id="resultPage" class="card hidden">
 <h2>Results</h2>
 <div id="resultStudent" class="info"></div>
-<h1 id="score" style="text-align:center; font-size: 28px;"></h1>
-<p id="percentage" style="text-align:center; font-size: 20px; margin-bottom: 20px; font-weight: bold;"></p>
+<h1 id="score" style="text-align:center"></h1>
+<p id="percentage" style="text-align:center;font-size:20px"></p>
 <div id="review"></div>
 <button id="menuResultBtn">Return to Menu</button>
 </section>
@@ -217,488 +163,397 @@ a{color:#19d3c5;overflow-wrap:anywhere}
 
 <script>
 (function(){
-"use strict";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyC99Vp9s1PvuHkrtc3m9eg9I6rUeeOQEUg",
-  authDomain: "smart-exam-platform-f2150.firebaseapp.com",
-  projectId: "smart-exam-platform-f2150",
-  storageBucket: "smart-exam-platform-f2150.firebasestorage.app",
-  messagingSenderId: "869198602798",
-  appId: "1:869198602798:web:7b061a8946c3a6bcdcf5bf",
-  measurementId: "G-4ZE83MBGBD"
-};
-
+'use strict';
+const firebaseConfig={apiKey:"AIzaSyC99Vp9s1PvuHkrtc3m9eg9I6rUeeOQEUg",authDomain:"smart-exam-platform-f2150.firebaseapp.com",projectId:"smart-exam-platform-f2150",storageBucket:"smart-exam-platform-f2150.firebasestorage.app",messagingSenderId:"869198602798",appId:"1:869198602798:web:7b061a8946c3a6bcdcf5bf",measurementId:"G-4ZE83MBGBD"};
 firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const auth = firebase.auth();
-
-auth.signInAnonymously().catch((error) => {
-  console.error("Auth Error:", error.code, error.message);
-});
-
-const $ = id => document.getElementById(id);
-const pages = ["loginPage","menuPage","addPage","importPage","keyPage","bankPage","adminPage","quizPage","resultPage"];
-let questions = [], student = {name:"",school:""}, minutes = 30, quiz = [], answers = [], index = 0, mode = "", seconds = 0, timerId = null;
-const SUBJECTS = ["Physics","Chemistry","Biology","Mathematics","English","General"];
-const MINUTES_KEY = "smartExamFixedMinutes";
-const AI_KEY_STORAGE = "smartExamOpenRouterKey"; 
-
-function normalizeSubject(value){ return SUBJECTS.includes(value) ? value : "General"; }
-function normalizeSet(value){ return String(value || "").trim() || "Default Set"; }
-function normalizeTopic(value){ return String(value || "").trim() || "General"; }
-function normalizeAnswer(value){
-  if(value === null || value === undefined) return null;
-  if(typeof value === "number" && value >= 0 && value <= 3) return value;
-  const text = String(value).trim().toUpperCase();
-  if(["A","B","C","D"].includes(text)) return text.charCodeAt(0)-65;
-  return null;
+const db=firebase.firestore();
+const auth=firebase.auth();
+const $=id=>document.getElementById(id);
+const pages=['loginPage','menuPage','addPage','importPage','keyPage','bankPage','adminPage','quizPage','resultPage'];
+let questions=[],student={name:'',school:''},quiz=[],answers=[],index=0,mode='',seconds=0,timerId=null,examMinutes=30;
+const AI_KEY='smartExamOpenRouterKey';
+const normSubject=s=>['Physics','Chemistry','Biology','Mathematics','English','General'].includes(s)?s:'General';
+const normSet=s=>String(s||'').trim()||'Default Set';
+const normTopic=s=>String(s||'').trim()||'General';
+function normAnswer(a){
+  if(a===null||a===undefined||a==='')return null;
+  if(typeof a==='number'&&a>=0&&a<=3)return a;
+  let s=String(a).trim().toUpperCase();
+  if(/^[A-D]$/.test(s))return s.charCodeAt(0)-65;
+  if(/^[0-3]$/.test(s))return Number(s);
+  return null
 }
-
 try{
-  const savedMinutes = Number(localStorage.getItem(MINUTES_KEY));
-  if(savedMinutes >= 1) minutes = savedMinutes;
-  const savedKey = localStorage.getItem(AI_KEY_STORAGE);
-  if(savedKey) { $("mainAiKey").value = savedKey; $("mainAiStatus").textContent = "✅ AI Key is saved."; }
+  const k=localStorage.getItem(AI_KEY);
+  if(k)$('mainAiKey').value=k
 }catch(e){}
 
-$("loadingData").classList.remove("hidden");
-db.collection("questions").onSnapshot((snapshot) => {
-  questions = [];
-  snapshot.forEach((doc) => {
-    const data = doc.data();
-    questions.push({ id: doc.id, ...data });
-  });
-  updateCount();
-  refreshDropdowns();
-  $("loadingData").classList.add("hidden");
-}, (error) => {
-  $("loadingData").textContent = "Error connecting to database.";
+auth.signInAnonymously().then(()=>{
+  $('cloudStatus').textContent='Connected to Firebase.'
+}).catch(e=>{
+  $('cloudStatus').textContent='Firebase sign-in error: '+e.message
 });
 
-function updateCount(){ $("count").textContent = questions.length; }
+db.collection('questions').onSnapshot(s=>{
+  questions=s.docs.map(d=>({id:d.id,...d.data(),answer:normAnswer(d.data().answer)}));
+  $('count').textContent=questions.length;
+  refreshDropdowns();
+  $('cloudStatus').textContent='Questions synced online.'
+},e=>{
+  $('cloudStatus').textContent='Database error: '+e.message
+});
 
 function showPage(id){
-  if(mode === "exam" && id !== "quizPage" && id !== "resultPage"){
-    if(!confirm("Are you sure you want to quit the exam? Your progress will be lost.")) return;
-    if(timerId) clearInterval(timerId);
-    mode = "";
+  pages.forEach(p=>$(p).classList.add('hidden'));
+  $(id).classList.remove('hidden');
+  if(id==='bankPage')renderBank();
+  if(id==='adminPage')loadResults()
+}
+
+$('continueBtn').onclick=()=>{
+  let name=$('studentName').value.trim(),school=$('schoolName').value.trim();
+  if(!name||!school){$('loginMessage').textContent='Enter your name and school.';return}
+  student={name,school};
+  $('welcome').textContent='Welcome, '+name;
+  showPage('menuPage')
+};
+
+$('saveAiKey').onclick=()=>{
+  let k=$('mainAiKey').value.trim();
+  if(!k.startsWith('sk-or-v1-')){$('aiStatus').textContent='Please enter a valid-looking OpenRouter key beginning sk-or-v1-.';return}
+  try{
+    localStorage.setItem(AI_KEY,k);
+    $('aiStatus').textContent='AI key saved on this device.'
+  }catch(e){
+    $('aiStatus').textContent='Could not save key.'
   }
-  pages.forEach(p => $(p).classList.add("hidden"));
-  $(id).classList.remove("hidden");
-  if (id === "adminPage") loadStudentResults();
-  updateCount();
-}
-
-function login(){
-  const name = $("studentName").value.trim(), school = $("schoolName").value.trim();
-  if(!name || !school){ $("loginMessage").textContent = "Enter name and school."; return; }
-  student = {name,school}; $("welcome").textContent = "Welcome, " + name; showPage("menuPage");
-}
-
-$("saveMainAiKeyBtn").onclick = function() {
-    const key = $("mainAiKey").value.trim();
-    if(!key.startsWith("sk-or-v1-")) { alert("This doesn't look like an OpenRouter key. It should start with 'sk-or-v1-'."); return; }
-    localStorage.setItem(AI_KEY_STORAGE, key);
-    $("mainAiStatus").textContent = "✅ AI Key saved successfully to this phone!";
 };
 
-/* ================= REAL-TIME AI IN PRACTICE MODE (OPENROUTER) ================= */
-window.selAns = async (j) => { 
-  answers[index] = j; 
-  if(mode === "practice") { 
-      const q = quiz[index];
-      
-      if (q.answer === null || q.answer === undefined) {
-          const key = localStorage.getItem(AI_KEY_STORAGE);
-          if (!key) {
-              $("quizMessage").innerHTML = "⚠️ No Answer Key. Please save an AI Key on the main menu to auto-grade.";
-              return;
-          }
-          
-          $("quizMessage").innerHTML = "<span style='color:#19d3c5'>🤖 AI is analyzing the question and generating an explanation...</span>";
-          
-          for(let x=0; x<4; x++) { const el = $("opt-"+x); if(el) el.querySelector("input").disabled = true; }
-          
-          try {
-              const prompt = `You are an exam grader. Determine the correct answer and provide a brief explanation (max 2 sentences) for the following multiple-choice question.
-Question: ${q.question}
-A) ${q.options[0]}
-B) ${q.options[1]}
-C) ${q.options[2]}
-D) ${q.options[3]}
-
-Respond in JSON format strictly like this example: {"answer": "A", "explanation": "Because the mitochondria is the powerhouse..."}`;
-
-              const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-                  method: 'POST',
-                  headers: { 
-                      'Content-Type': 'application/json', 
-                      'Authorization': 'Bearer ' + key,
-                      'HTTP-Referer': 'https://firomsa-12.github.io', 
-                      'X-Title': 'Smart Exam Platform'
-                  },
-                  body: JSON.stringify({ 
-                      model: "meta-llama/llama-3-8b-instruct:free", // Highly stable free model
-                      messages: [{ role: "user", content: prompt }],
-                      temperature: 0
-                  })
-              });
-              
-              const data = await res.json();
-              if(data.error) throw new Error(data.error.message);
-              
-              let aiText = data.choices[0].message.content.trim();
-              let ansIndex = null;
-              let explanation = "Explanation generated by AI.";
-
-              try {
-                  let cleanJson = aiText.replace(/```json/gi, "").replace(/```/g, "").trim();
-                  const parsed = JSON.parse(cleanJson);
-                  ansIndex = String(parsed.answer).toUpperCase().charCodeAt(0) - 65;
-                  if(parsed.explanation) explanation = parsed.explanation;
-              } catch(e) {
-                  const letterMatch = aiText.match(/(?:Answer|correct answer is|is)\s*:?\s*([A-D])/i) || aiText.match(/\b([A-D])\b/);
-                  if(letterMatch) ansIndex = letterMatch[1].toUpperCase().charCodeAt(0) - 65;
-                  
-                  const explMatch = aiText.match(/(?:Explanation|Because)\s*:?\s*(.*)/i);
-                  if(explMatch) explanation = explMatch[1];
-              }
-
-              if(ansIndex === null || isNaN(ansIndex)) throw new Error("AI could not determine a valid A, B, C, or D.");
-              
-              q.answer = ansIndex;
-              q.explanation = explanation;
-              
-              db.collection("questions").doc(q.id).update({ 
-                  answer: ansIndex,
-                  explanation: explanation
-              }).catch(e => console.log("DB update failed:", e));
-              
-          } catch(e) {
-              $("quizMessage").innerHTML = `<span style="color:#ff6577">❌ AI Error: ${e.message}</span>`;
-              for(let x=0; x<4; x++) { const el = $("opt-"+x); if(el) el.querySelector("input").disabled = false; }
-              return;
-          }
-      }
-      
-      showFeedback(); 
-  } 
-};
-/* ================================================= */
-
-function loadStudentResults() {
-    const container = $("resultsContainer");
-    container.innerHTML = "<p class='small'>Fetching results...</p>";
-    db.collection("results").orderBy("date", "desc").get().then((snapshot) => {
-        container.innerHTML = "";
-        if (snapshot.empty) { container.innerHTML = "<p class='small'>No student has taken an exam yet.</p>"; return; }
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const dateObj = new Date(data.date);
-            const dateStr = dateObj.toLocaleDateString() + " " + dateObj.toLocaleTimeString();
-            const div = document.createElement("div");
-            div.className = `result-card ${data.percentage >= 50 ? 'pass' : 'fail'}`;
-            div.innerHTML = `
-                <div class="result-header">
-                    <span>${data.studentName} (${data.school})</span>
-                    <span style="color:${data.percentage >= 50 ? '#19d3c5' : '#ff6577'}">${data.percentage}%</span>
-                </div>
-                <div class="small">Score: ${data.score} / ${data.total}</div>
-                <div class="small" style="opacity: 0.6; margin-top: 5px;">${dateStr}</div>
-                <button class="danger" style="margin-top: 10px; padding: 5px; font-size: 12px; width: auto;" onclick="deleteResult('${doc.id}')">Delete</button>
-            `;
-            container.appendChild(div);
-        });
-    }).catch((error) => { container.innerHTML = "<p class='small' style='color:#ff6577'>Error: " + error.message + "</p>"; });
-}
-
-window.deleteResult = function(id) {
-    if(confirm("Delete this result permanently?")) db.collection("results").doc(id).delete().then(() => loadStudentResults());
-};
-
-$("refreshResultsBtn").onclick = loadStudentResults;
-
-$("saveQuestionBtn").onclick = function() {
-  const q = $("qText").value.trim(), opts = [$("a").value.trim(),$("b").value.trim(),$("c").value.trim(),$("d").value.trim()];
-  if(!q || opts.some(x => !x)){ $("addMessage").textContent = "Complete all fields."; return; }
-  $("addMessage").textContent = "Saving...";
-  db.collection("questions").add({
-    question: q, options: opts, answer: Number($("correct").value), explanation: "",
-    subject: normalizeSubject($("addSubject").value), setName: normalizeSet($("addSet").value), topic: normalizeTopic($("addTopic").value)
-  }).then(() => {
-    $("qText").value = ""; ["a","b","c","d"].forEach(id => $(id).value = ""); 
-    $("addMessage").textContent = "Saved!";
+async function askAI(q){
+  let key='';
+  try{key=localStorage.getItem(AI_KEY)||''}catch(e){}
+  if(!key)throw Error('Add your OpenRouter API key on the dashboard first.');
+  const prompt=`Solve this multiple-choice educational question carefully. Return ONLY valid JSON: {"answer":"A","explanation":"brief explanation"}. If the options do not contain a clear answer, choose the best option and say uncertainty in explanation.\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
+  const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
+      'Authorization':'Bearer '+key,
+      'HTTP-Referer':location.origin,
+      'X-Title':'Smart Exam Platform'
+    },
+    body:JSON.stringify({
+      model:'openrouter/free', // USING THE ROUTER FOR STABILITY
+      messages:[{role:'user',content:prompt}],
+      temperature:0
+    })
   });
-};
-
-$("continueBtn").onclick = login;
-$("saveDurationBtn").onclick = function(){ const v = Number($("duration").value); if(v >= 1){ localStorage.setItem(MINUTES_KEY,v); minutes = v; $("durationMessage").textContent = "Saved."; } };
-$("addBtn").onclick = () => { $("duration").value = minutes; showPage("addPage"); };
-$("importBtn").onclick = () => showPage("importPage");
-$("keyBtn").onclick = () => showPage("keyPage");
-
-$("adminBtn").onclick = () => {
-    const pin = prompt("Enter Teacher PIN:");
-    if (pin === "1234") showPage("adminPage");
-    else if (pin !== null) alert("Incorrect PIN.");
-};
-
-$("applyKeyBtn").onclick = function() {
-    const setName = normalizeSet($("keySetName").value);
-    const subName = normalizeSubject($("keySubject").value);
-    const keyText = $("keyText").value;
-    if(!keyText.trim()) { $("keyMessage").textContent = "Please paste the answer key."; return; }
-    
-    const answersMap = {};
-    const regex = /(\d+)\s*[.)\-:]?\s*([A-D])/gi;
-    let match;
-    while ((match = regex.exec(keyText)) !== null) { answersMap[match[1]] = normalizeAnswer(match[2]); }
-    
-    const questionsToUpdate = questions.filter(q => q.setName === setName && q.subject === subName);
-    if (questionsToUpdate.length === 0) { $("keyMessage").textContent = "No questions found for this Subject and Set Name."; return; }
-
-    $("keyMessage").textContent = "Applying answers...";
-    let batch = db.batch();
-    let appliedCount = 0;
-
-    questionsToUpdate.forEach((q, idx) => {
-        const qNum = idx + 1;
-        if(answersMap[qNum] !== undefined) {
-            batch.update(db.collection("questions").doc(q.id), { answer: answersMap[qNum] });
-            appliedCount++;
-        }
-    });
-
-    batch.commit().then(() => {
-        $("keyMessage").textContent = `✅ Successfully applied ${appliedCount} answers.`;
-        $("keyText").value = "";
-    }).catch((err) => { $("keyMessage").textContent = "Error: " + err.message; });
-};
-
-$("bankBtn").onclick = () => {
-  const box = $("bankContent"); box.innerHTML = "";
-  questions.forEach((q) => {
-    const card = document.createElement("div"); card.className = "question";
-    const ansText = q.answer !== null && q.answer !== undefined ? String.fromCharCode(65+q.answer) : "None";
-    let expl = q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explanation}</div>` : "";
-    card.innerHTML = `<h3>[${q.subject} - ${q.topic}] ${q.question}</h3>` + q.options.map((o,j)=>`<p>${String.fromCharCode(65+j)}. ${o}</p>`).join("") + `<p class="small" style="color:#19d3c5;">Answer: ${ansText}</p>` + expl;
-    const del = document.createElement("button"); del.textContent = "Delete from Cloud"; del.className = "danger";
-    del.onclick = () => { if(confirm("Delete permanently?")) db.collection("questions").doc(q.id).delete(); }; 
-    card.appendChild(del); box.appendChild(card);
-  });
-  showPage("bankPage");
-};
-
-function startQuiz(type) {
-  const sub = $("quizSubject").value, set = $("quizSet").value, top = $("quizTopic").value, limit = parseInt($("examLimit").value);
-  let aq = questions.filter(q => (sub === "All" || q.subject === sub) && (set === "All" || q.setName === set) && (top === "All" || q.topic === top)).sort(() => Math.random() - 0.5);
-  if(limit > 0 && limit < aq.length) aq = aq.slice(0, limit);
-  if(!aq.length) { alert("No questions match."); return; }
-
-  mode = type; quiz = aq; answers = new Array(quiz.length).fill(null); index = 0;
-  $("quizHeading").textContent = type === "exam" ? "Examination" : "Practice Mode";
-  $("submitBtn").classList.toggle("hidden", type !== "exam");
-  
-  if(type === "exam"){
-    seconds = minutes * 60; $("timer").textContent = `Time Left: ${minutes}m`;
-    if(timerId) clearInterval(timerId);
-    timerId = setInterval(() => { seconds--; $("timer").textContent = `Time Left: ${Math.floor(seconds/60)}m ${seconds%60}s`; if(seconds <= 0) finishQuiz(); }, 1000);
-  } else { $("timer").textContent = "Practice Mode"; if(timerId) clearInterval(timerId); }
-  showPage("quizPage"); renderQ();
+  let data;
+  try{data=await res.json()}catch(e){throw Error('AI returned an unreadable response.')}
+  if(!res.ok||data.error)throw Error((data.error&&data.error.message)||('OpenRouter request failed ('+res.status+').'));
+  let content=data.choices&&data.choices[0]&&data.choices[0].message&&data.choices[0].message.content;
+  if(!content)throw Error('AI returned no answer.');
+  content=content.replace(/```json|```/gi,'').trim();
+  let parsed;
+  try{parsed=JSON.parse(content)}catch(e){
+    let m=content.match(/\b(?:answer\s*[:=]?\s*)?([A-D])\b/i);
+    if(!m)throw Error('AI response did not contain a valid answer. Try again.');
+    parsed={answer:m[1],explanation:content}
+  }
+  let answer=normAnswer(parsed.answer);
+  if(answer===null)throw Error('AI did not return A, B, C, or D.');
+  return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
 }
 
-$("examBtn").onclick = () => startQuiz("exam");
-$("practiceBtn").onclick = () => startQuiz("practice");
-
-function renderQ(){
-  const q = quiz[index];
-  $("position").textContent = `Question ${index+1} of ${quiz.length}`;
-  $("quizMessage").innerHTML = "";
-  let html = `<h3>${q.question}</h3>`;
-  q.options.forEach((o,j) => {
-    html += `<label class="option" id="opt-${j}"><input type="radio" name="choice" onchange="window.selAns(${j})" ${answers[index]===j?'checked':''} ${mode==='practice' && answers[index]!==null?'disabled':''}><span>${String.fromCharCode(65+j)}. ${o}</span></label>`;
-  });
-  $("quizContent").innerHTML = html;
-  $("nextBtn").textContent = index === quiz.length - 1 ? "Finish" : "Next Question →";
-  
-  if(mode === "practice" && answers[index] !== null && quiz[index].answer !== null && quiz[index].answer !== undefined) {
-      showFeedback();
+async function ensureAnswers(list,showProgress){
+  let missing=list.filter(q=>q.answer===null||q.answer===undefined);
+  for(let n=0;n<missing.length;n++){
+    if(showProgress)showProgress(n+1,missing.length);
+    let q=missing[n];
+    let result=await askAI(q);
+    q.answer=result.answer;
+    q.explanation=result.explanation;
+    await db.collection('questions').doc(q.id).update({answer:result.answer,explanation:result.explanation})
   }
-}
-
-function showFeedback(){
-  const q = quiz[index];
-  for(let j=0; j<4; j++) {
-    const el = $("opt-"+j); if(!el) continue;
-    el.querySelector("input").disabled = true;
-    if(j === q.answer) el.style.border = "2px solid #19d3c5";
-    if(j === answers[index] && j !== q.answer) el.style.border = "2px solid #ff6577";
-  }
-  
-  let msg = "";
-  if (q.answer === null || q.answer === undefined) {
-      msg = "No answer key available.";
-  } else if (answers[index] === q.answer) {
-      msg = "✅ Correct!";
-  } else {
-      msg = `❌ Incorrect. Correct: ${String.fromCharCode(65+q.answer)}`;
-  }
-  
-  if (q.explanation) {
-      msg += `<div class="explanation-box"><strong>Explanation:</strong> ${q.explanation}</div>`;
-  }
-  
-  $("quizMessage").innerHTML = msg;
-}
-
-$("nextBtn").onclick = () => { 
-  if(mode === "practice" && answers[index] === null) { $("quizMessage").textContent = "Select an answer."; return; }
-  if(index < quiz.length-1){ index++; renderQ(); } else finishQuiz();
-};
-
-$("submitBtn").onclick = () => { if(confirm("Submit exam?")) finishQuiz(); };
-
-function finishQuiz(){
-  if(timerId) clearInterval(timerId);
-  let score = 0, gradable = 0;
-  quiz.forEach((q,i) => { if(q.answer !== null && q.answer !== undefined) { gradable++; if(answers[i] === q.answer) score++; } });
-  const percent = gradable > 0 ? Math.round((score / gradable) * 100) : 0;
-  
-  let comment = "", color = "";
-  if (percent >= 80) { comment = "🏆 Excellent!"; color = "#19d3c5"; } 
-  else if (percent >= 50) { comment = "👍 Good effort!"; color = "#ff9800"; } 
-  else { comment = "⚠️ Needs Improvement."; color = "#ff6577"; }
-
-  $("resultStudent").textContent = `Student: ${student.name} · School: ${student.school}`;
-  $("score").textContent = gradable > 0 ? `Score: ${score} / ${gradable}` : "No answer key";
-  $("score").style.color = color;
-  $("percentage").innerHTML = gradable > 0 ? `Percentage: ${percent}%<br><span style="font-size:16px;">${comment}</span>` : "Ungraded";
-  $("percentage").style.color = color;
-
-  if (mode === "exam" && gradable > 0) {
-      db.collection("results").add({ studentName: student.name, school: student.school, score: score, total: gradable, percentage: percent, date: new Date().toISOString() });
-  }
-  
-  let reviewHtml = "";
-  quiz.forEach((q,i) => {
-    let expl = q.explanation ? `<div class="explanation-box"><strong>Explanation:</strong> ${q.explanation}</div>` : "";
-    reviewHtml += `<div class="question"><p><strong>Q${i+1}: ${q.question}</strong></p><p class="small">Your answer: ${answers[i]!==null ? String.fromCharCode(65+answers[i]) : "None"}</p><p class="small" style="color:#19d3c5;">Correct: ${q.answer!==null && q.answer!==undefined?String.fromCharCode(65+q.answer):"None"}</p>${expl}</div>`;
-  });
-  $("review").innerHTML = reviewHtml;
-  mode = ""; showPage("resultPage");
+  return true
 }
 
 function refreshDropdowns(){
-  const sub = $("quizSubject").value;
-  const setSelect = $("quizSet"), currentSet = setSelect.value;
-  setSelect.innerHTML = `<option value="All">All Sets</option>`;
-  const sets = new Set();
-  questions.forEach(q => { if(sub === "All" || q.subject === sub) sets.add(q.setName); });
-  [...sets].sort().forEach(s => setSelect.innerHTML += `<option value="${s}">${s}</option>`);
-  if([...setSelect.options].some(o => o.value === currentSet)) setSelect.value = currentSet;
-
-  const topicSelect = $("quizTopic"), currentTopic = topicSelect.value;
-  topicSelect.innerHTML = `<option value="All">All topics</option>`;
-  const topics = new Set();
-  questions.forEach(q => { if((sub === "All" || q.subject === sub) && (setSelect.value === "All" || q.setName === setSelect.value)) topics.add(q.topic); });
-  [...topics].sort().forEach(t => topicSelect.innerHTML += `<option value="${t}">${t}</option>`);
-  if([...topicSelect.options].some(o => o.value === currentTopic)) topicSelect.value = currentTopic;
+  let sub=$('quizSubject').value,setOld=$('quizSet').value,topicOld=$('quizTopic').value;
+  let sets=[...new Set(questions.filter(q=>sub==='All'||q.subject===sub).map(q=>q.setName||'Default Set'))].sort();
+  $('quizSet').innerHTML='<option>All</option>'+sets.map(s=>`<option>${esc(s)}</option>`).join('');
+  if(sets.includes(setOld))$('quizSet').value=setOld;
+  let topics=[...new Set(questions.filter(q=>(sub==='All'||q.subject===sub)&&($('quizSet').value==='All'||(q.setName||'Default Set')===$('quizSet').value)).map(q=>q.topic||'General'))].sort();
+  $('quizTopic').innerHTML='<option>All</option>'+topics.map(t=>`<option>${esc(t)}</option>`).join('');
+  if(topics.includes(topicOld))$('quizTopic').value=topicOld
 }
 
-$("quizSubject").onchange = refreshDropdowns;
-$("quizSet").onchange = refreshDropdowns;
-$("quitBtn").onclick = () => { if(mode==="exam" && !confirm("Quit exam?")) return; if(timerId) clearInterval(timerId); mode = ""; showPage("menuPage"); };
-$("menuResultBtn").onclick = () => showPage("menuPage");
-document.querySelectorAll(".backBtn").forEach(b => b.onclick = () => showPage("menuPage"));
+$('quizSubject').onchange=refreshDropdowns;
+$('quizSet').onchange=refreshDropdowns;
+$('addBtn').onclick=()=>showPage('addPage');
+$('importBtn').onclick=()=>showPage('importPage');
+$('keyBtn').onclick=()=>showPage('keyPage');
+$('bankBtn').onclick=()=>showPage('bankPage');
 
-function saveImportedQuestions(importedData) {
-    if(!importedData.length) { $("importMessage").textContent = "No valid questions."; return; }
-    $("importMessage").textContent = "Uploading to cloud...";
-    let batch = db.batch();
-    importedData.forEach(q => { batch.set(db.collection("questions").doc(), q); });
-    batch.commit().then(() => {
-        $("importMessage").textContent = "✅ Imported successfully!";
-        $("jsonText").value = ""; $("jsonFile").value = ""; $("selectedFile").textContent = "No file selected.";
-    }).catch(err => $("importMessage").textContent = "Error: " + err.message);
-}
-
-function parseQuestionJSON(text){ try{ return JSON.parse(text); } catch(e){ throw Error("Invalid JSON."); } }
-function processImported(data, defaultSubject, defaultTopic, defaultSetName){
-  if(!Array.isArray(data) || data.length === 0) throw Error("Needs a non-empty array.");
-  return data.map(q => ({ question: q.question.trim(), options: q.options.map(o => String(o).trim()), answer: normalizeAnswer(q.answer), explanation: q.explanation || "", subject: normalizeSubject(q.subject || defaultSubject), setName: normalizeSet(q.setName || defaultSetName), topic: normalizeTopic(q.topic || defaultTopic) })).filter(q => q.question && q.options.length === 4);
-}
-
-function parseDocumentQuestions(rawText, defaultSubject){
-  if(!rawText) throw Error("No text.");
-  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ").replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n").replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
-  const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
-  const answerKey = Object.create(null), questionChunks = [];
-  let current = null, readingAnswerKey = false;
-
-  const questionStart = /^(?:question\s*)?(\d{1,4})[.)]\s*(.+)$/i;
-  const optionLine = /^([A-D])\s*[.)]\s*(.*)$/i;
-  const keyHeader = /^(?:answer\s*key|answers|correct\s*answers)\s*[:\-]?\s*$/i;
-  const keyItem = /^(?:question\s*)?(\d{1,4})\s*[.)\-:]?\s*([A-D]|[0-3])\s*$/i;
-
-  for(const line of lines){
-    if(keyHeader.test(line)){ if(current){questionChunks.push(current);current=null;} readingAnswerKey = true; continue; }
-    if(readingAnswerKey){ const k = keyItem.exec(line); if(k){ answerKey[Number(k[1])] = normalizeAnswer(k[2]); continue; } readingAnswerKey = false; }
-    const qMatch = questionStart.exec(line);
-    if(qMatch){ if(current){questionChunks.push(current);} current = {number:Number(qMatch[1]),parts:[qMatch[2]],options:[],answer:null}; continue; }
-    if(!current) continue;
-    const opt = optionLine.exec(line);
-    if(opt){ current.options[opt[1].toUpperCase().charCodeAt(0)-65] = opt[2].trim().substring(0,150); continue; }
-    current.parts.push(line);
+$('saveQuestion').onclick=async()=>{
+  let question=$('qText').value.trim(),options=['a','b','c','d'].map(id=>$(id).value.trim());
+  if(!question||options.some(o=>!o)){$('addMessage').textContent='Complete the question and all four options.';return}
+  let ans=$('correct').value;
+  let data={
+    question,options,
+    answer:ans===''?null:Number(ans),
+    explanation:$('addExplanation').value.trim(),
+    subject:normSubject($('addSubject').value),
+    setName:normSet($('addSet').value),
+    topic:normTopic($('addTopic').value),
+    createdAt:new Date().toISOString()
+  };
+  $('addMessage').textContent='Saving online...';
+  try{
+    await db.collection('questions').add(data);
+    $('addMessage').textContent='Question saved online.';
+    $('qText').value='';
+    ['a','b','c','d','addExplanation'].forEach(id=>$(id).value='')
+  }catch(e){
+    $('addMessage').textContent='Save error: '+e.message
   }
-  if(current) questionChunks.push(current);
-
-  const imported = [];
-  for(const item of questionChunks){
-    if(item.options.length !== 4 || item.options.some(o => !o)) continue;
-    const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
-    imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: item.options, answer: answer, explanation: "", subject: defaultSubject });
-  }
-  return imported;
-}
-
-async function extractFileText(file){
-  if(file.name.match(/\.(json|txt)$/i)) return await file.text();
-  if(file.name.match(/\.pdf$/i)){
-    const buffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({data:buffer}).promise;
-    let fullText = "";
-    for(let p=1; p<=pdf.numPages; p++) fullText += "\n" + (await (await pdf.getPage(p)).getTextContent()).items.map(i=>i.str).join(" ") + "\n";
-    return fullText;
-  }
-  if(file.name.match(/\.docx$/i)){
-    const buffer = await file.arrayBuffer();
-    return (await mammoth.extractRawText({arrayBuffer:buffer})).value || "";
-  }
-  throw Error("Unsupported file.");
-}
-
-$("importTextBtn").onclick = () => {
-    try { const res = processImported(parseQuestionJSON($("jsonText").value), $("importSubject").value, $("importTopic").value, $("importSetName").value.trim() || "Pasted JSON Set"); saveImportedQuestions(res); } 
-    catch(e) { $("importMessage").textContent = "Error: " + e.message; }
 };
 
-$("chooseFileBtn").onclick = () => $("jsonFile").click();
-$("jsonFile").onchange = function(){ $("selectedFile").textContent = this.files[0] ? "Selected: "+this.files[0].name : "No file"; };
-
-$("importFileBtn").onclick = async function() {
-  const file = $("jsonFile").files[0];
-  if(!file) { $("importMessage").textContent = "Choose a file first."; return; }
-  $("importMessage").textContent = "Reading...";
-  try {
-    let setName = $("importSetName").value.trim() || file.name.replace(/\.[^/.]+$/, "");
-    const rawText = await extractFileText(file);
-    let data = file.name.match(/\.json$/i) ? parseQuestionJSON(rawText) : parseDocumentQuestions(rawText, $("importSubject").value);
-    saveImportedQuestions(processImported(data, $("importSubject").value, $("importTopic").value, setName));
-  } catch(e) { $("importMessage").textContent = "Error: " + e.message; }
+$('importJson').onclick=async()=>{
+  try{
+    let arr=JSON.parse($('jsonText').value);
+    if(!Array.isArray(arr)||!arr.length)throw Error('Paste a non-empty JSON array.');
+    let batch=db.batch(),valid=0;
+    for(const q of arr){
+      if(!q.question||!Array.isArray(q.options)||q.options.length!==4)continue;
+      let ref=db.collection('questions').doc();
+      batch.set(ref,{
+        question:String(q.question),
+        options:q.options.map(String),
+        answer:normAnswer(q.answer),
+        explanation:String(q.explanation||''),
+        subject:normSubject(q.subject||$('importSubject').value),
+        setName:normSet(q.setName||$('importSet').value),
+        topic:normTopic(q.topic||$('importTopic').value)
+      });
+      valid++
+    }
+    if(!valid)throw Error('No valid questions. Each needs question and four options.');
+    await batch.commit();
+    $('importMessage').textContent='Imported '+valid+' questions online.';
+    $('jsonText').value=''
+  }catch(e){
+    $('importMessage').textContent='Import error: '+e.message
+  }
 };
 
-updateCount(); refreshDropdowns();
+$('applyKey').onclick=async()=>{
+  let set=normSet($('keySet').value),sub=$('keySubject').value,text=$('keyText').value,mp={};
+  const re=/(\d+)\s*[.)\-:]?\s*([A-D])/gi;
+  let m;
+  while((m=re.exec(text))!==null)mp[Number(m[1])]=normAnswer(m[2]);
+  let list=questions.filter(q=>q.subject===sub&&(q.setName||'Default Set')===set);
+  if(!list.length){$('keyMessage').textContent='No questions match that subject and set name.';return}
+  try{
+    let batch=db.batch(),n=0;
+    list.forEach((q,i)=>{
+      if(mp[i+1]!==undefined){
+        batch.update(db.collection('questions').doc(q.id),{answer:mp[i+1]});
+        n++
+      }
+    });
+    if(!n)throw Error('No numbered answers found. Use format 1. A, 2. C, 3. B.');
+    await batch.commit();
+    $('keyMessage').textContent='Applied '+n+' manual answers. Manual answers always take priority over AI.'
+  }catch(e){
+    $('keyMessage').textContent='Error: '+e.message
+  }
+};
+
+function renderBank(){
+  let box=$('bankContent');
+  box.innerHTML='';
+  questions.forEach(q=>{
+    let div=document.createElement('div');
+    div.className='question';
+    div.innerHTML=`<h3>[${esc(q.subject||'General')} — ${esc(q.topic||'General')}] ${esc(q.question)}</h3>`+q.options.map((o,i)=>`<p>${'ABCD'[i]}. ${esc(o)}</p>`).join('')+`<p class="small">Set: ${esc(q.setName||'Default Set')} · Answer: ${q.answer===null?'Not set':'ABCD'[q.answer]}</p>`+(q.explanation?`<div class="explanation-box">${esc(q.explanation)}</div>`:'');
+    let b=document.createElement('button');
+    b.className='danger';
+    b.textContent='Delete from Cloud';
+    b.onclick=async()=>{
+      if(confirm('Delete this question permanently?'))await db.collection('questions').doc(q.id).delete()
+    };
+    div.appendChild(b);
+    box.appendChild(div)
+  })
+}
+
+async function startQuiz(type){
+  let sub=$('quizSubject').value,set=$('quizSet').value,topic=$('quizTopic').value,limit=parseInt($('examLimit').value,10);
+  let list=questions.filter(q=>(sub==='All'||q.subject===sub)&&(set==='All'||(q.setName||'Default Set')===set)&&(topic==='All'||(q.topic||'General')===topic));
+  if(limit>0)list=list.slice(0,limit);
+  if(!list.length){alert('No questions match your filters.');return}
+  list=list.slice().sort(()=>Math.random()-.5);
+  if(type==='exam'&&list.some(q=>q.answer===null||q.answer===undefined)){
+    let ok=confirm('Some questions have no manual answer. Use AI to generate missing answers before the exam starts?');
+    if(!ok)return;
+    try{
+      $('cloudStatus').textContent='AI is preparing missing answers. Please wait...';
+      await ensureAnswers(list,(n,total)=>{
+        $('cloudStatus').textContent=`AI preparing answers: ${n}/${total}`
+      });
+      $('cloudStatus').textContent='All missing answers have been generated and saved.'
+    }catch(e){
+      $('cloudStatus').textContent='AI error: '+e.message;
+      alert('Could not prepare exam answers: '+e.message);
+      return
+    }
+  }
+  mode=type;
+  quiz=list;
+  answers=new Array(list.length).fill(null);
+  index=0;
+  $('quizHeading').textContent=type==='exam'?'Examination':'Practice Mode';
+  $('submitBtn').classList.toggle('hidden',type!=='exam');
+  if(timerId)clearInterval(timerId);
+  if(type==='exam'){
+    seconds=30*60;
+    $('timer').textContent='Time Left: 30:00';
+    timerId=setInterval(()=>{
+      seconds--;
+      $('timer').textContent='Time Left: '+Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
+      if(seconds<=0)finishQuiz()
+    },1000)
+  }else $('timer').textContent='Practice Mode';
+  showPage('quizPage');
+  renderQ()
+}
+
+$('examBtn').onclick=()=>startQuiz('exam');
+$('practiceBtn').onclick=()=>startQuiz('practice');
+
+window.selectAnswer=async j=>{
+  answers[index]=j;
+  if(mode==='practice'){
+    let q=quiz[index];
+    if(q.answer===null||q.answer===undefined){
+      $('quizMessage').textContent='AI is finding the answer...';
+      disableOptions(true);
+      try{
+        let r=await askAI(q);
+        q.answer=r.answer;
+        q.explanation=r.explanation;
+        if(q.id)await db.collection('questions').doc(q.id).update({answer:r.answer,explanation:r.explanation});
+        showFeedback()
+      }catch(e){
+        $('quizMessage').textContent='AI Error: '+e.message;
+        disableOptions(false)
+      }
+    }else showFeedback()
+  }
+};
+
+function disableOptions(v){
+  for(let i=0;i<4;i++){
+    let el=$('opt-'+i);
+    if(el)el.querySelector('input').disabled=v
+  }
+}
+
+function renderQ(){
+  let q=quiz[index];
+  $('position').textContent=`Question ${index+1} of ${quiz.length}`;
+  $('quizMessage').innerHTML='';
+  $('quizContent').innerHTML=`<h3>${esc(q.question)}</h3>`+q.options.map((o,j)=>`<label class="option" id="opt-${j}"><input type="radio" name="choice" onchange="window.selectAnswer(${j})" ${answers[index]===j?'checked':''} ${mode==='practice'&&answers[index]!==null?'disabled':''}><span>${'ABCD'[j]}. ${esc(o)}</span></label>`).join('');
+  $('nextBtn').textContent=index===quiz.length-1?'Finish':'Next Question →';
+  if(mode==='practice'&&answers[index]!==null&&q.answer!==null)showFeedback()
+}
+
+function showFeedback(){
+  let q=quiz[index];
+  for(let j=0;j<4;j++){
+    let el=$('opt-'+j);
+    if(!el)continue;
+    el.querySelector('input').disabled=true;
+    el.style.border=j===q.answer?'2px solid #19d3c5':(j===answers[index]?'2px solid #ff6577':'0')
+  }
+  let msg=q.answer===null?'No answer key available.':answers[index]===q.answer?'✅ Correct!':`❌ Incorrect. Correct answer: ${'ABCD'[q.answer]}`;
+  if(q.explanation)msg+=`<div class="explanation-box"><strong>Explanation:</strong> ${esc(q.explanation)}</div>`;
+  $('quizMessage').innerHTML=msg
+}
+
+$('nextBtn').onclick=()=>{
+  if(mode==='practice'&&answers[index]===null){$('quizMessage').textContent='Select an answer first.';return}
+  if(index<quiz.length-1){index++;renderQ()}else finishQuiz()
+};
+
+$('submitBtn').onclick=()=>{
+  if(confirm('Submit exam?'))finishQuiz()
+};
+
+$('quitBtn').onclick=()=>{
+  if(mode==='exam'&&!confirm('Quit exam? Your progress will be lost.'))return;
+  if(timerId)clearInterval(timerId);
+  mode='';
+  showPage('menuPage')
+};
+
+async function finishQuiz(){
+  if(timerId)clearInterval(timerId);
+  let score=0,total=0;
+  quiz.forEach((q,i)=>{
+    if(q.answer!==null&&q.answer!==undefined){
+      total++;
+      if(answers[i]===q.answer)score++
+    }
+  });
+  let pct=total?Math.round(score/total*100):0;
+  $('resultStudent').textContent=`Student: ${student.name} · School: ${student.school}`;
+  $('score').textContent=total?`Score: ${score} / ${total}`:'No answer key';
+  $('percentage').textContent=total?`Percentage: ${pct}%`:'Ungraded';
+  $('review').innerHTML=quiz.map((q,i)=>`<div class="question"><p><strong>Q${i+1}: ${esc(q.question)}</strong></p><p class="small">Your answer: ${answers[i]===null?'None':'ABCD'[answers[i]]}</p><p class="small">Correct answer: ${q.answer===null?'None':'ABCD'[q.answer]}</p>${q.explanation?`<div class="explanation-box">${esc(q.explanation)}</div>`:''}</div>`).join('');
+  if(mode==='exam'&&total){
+    try{
+      await db.collection('results').add({studentName:student.name,school:student.school,score,total,percentage:pct,date:new Date().toISOString()})
+    }catch(e){
+      alert('Could not save result online: '+e.message)
+    }
+  }
+  mode='';
+  showPage('resultPage')
+}
+
+$('menuResultBtn').onclick=()=>showPage('menuPage');
+document.querySelectorAll('.backBtn').forEach(b=>b.onclick=()=>showPage('menuPage'));
+
+$('adminBtn').onclick=()=>{
+  let pin=prompt('Enter Teacher PIN:');
+  if(pin==='1234')showPage('adminPage');
+  else if(pin!==null)alert('Incorrect PIN.')
+};
+$('refreshResults').onclick=loadResults;
+
+async function loadResults(){
+  let box=$('resultsContainer');
+  box.innerHTML='<p class="small">Loading results...</p>';
+  try{
+    let snap=await db.collection('results').orderBy('date','desc').get();
+    box.innerHTML='';
+    if(snap.empty){box.textContent='No results yet.';return}
+    snap.forEach(d=>{
+      let r=d.data(),div=document.createElement('div');
+      div.className='question';
+      div.innerHTML=`<strong>${esc(r.studentName)} (${esc(r.school)})</strong><p>Score: ${r.score}/${r.total} · ${r.percentage}%</p><p class="small">${esc(new Date(r.date).toLocaleString())}</p>`;
+      box.appendChild(div)
+    })
+  }catch(e){
+    box.textContent='Results error: '+e.message
+  }
+}
+
+function esc(v){
+  return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))
+}
 })();
 </script>
 </body>
