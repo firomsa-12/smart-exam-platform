@@ -30,7 +30,7 @@ button{width:100%;padding:13px;margin-top:12px;border:0;border-radius:8px;backgr
 .option{display:flex;gap:10px;align-items:flex-start;padding:12px;background:#192b48;border-radius:8px;margin:8px 0;cursor:pointer}
 .option input{width:auto}
 
-/* EXACT MATCH FOR THE BLUE AI EXPLANATION BOX */
+/* BLUE AI EXPLANATION BOX */
 .explanation-box {
     background: #0f2645;
     border: 1px solid #2b5c8f;
@@ -263,8 +263,8 @@ auth.signInAnonymously().then(()=>{
 db.collection('questions').onSnapshot(s=>{
   questions = s.docs.map(d=>({id:d.id,...d.data(),answer:normAnswer(d.data().answer)}))
     .sort((a, b) => {
-        let seqA = a.sequence !== undefined ? a.sequence : new Date(a.createdAt || 0).getTime();
-        let seqB = b.sequence !== undefined ? b.sequence : new Date(b.createdAt || 0).getTime();
+        let seqA = a.sequence !== undefined ? Number(a.sequence) : new Date(a.createdAt || 0).getTime();
+        let seqB = b.sequence !== undefined ? Number(b.sequence) : new Date(b.createdAt || 0).getTime();
         return seqA - seqB;
     });
     
@@ -319,13 +319,19 @@ async function askAI(q){
   try{key=localStorage.getItem(AI_KEY)||''}catch(e){}
   if(!key)throw Error('Add your Groq API Key first.');
   
-  const prompt = `You are an expert exam grader. Determine the correct answer and provide a highly detailed explanation for the following multiple-choice question. \nUse Markdown formatting to structure your response (use **bold** for key terms, and use bullet points for lists).\n\nQuestion: ${q.question}\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}\n\nRespond strictly in JSON format: {"answer": "A", "explanation": "**Core Concept:** This is why...\\n\\n**Conclusion:** Therefore, A is correct."}`;
+  // Check if options exist. If not, just ask for the answer and explanation.
+  let optionsText = "";
+  if(q.options && q.options.length === 4 && !q.options.some(o => !o || o.trim() === '')) {
+      optionsText = `\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
+  }
+
+  const prompt = `You are an expert exam grader. Determine the correct answer and provide a highly detailed explanation for the following question. \nUse Markdown formatting to structure your response (use **bold** for key terms, and use bullet points for lists).\n\nQuestion: ${q.question}${optionsText}\n\nRespond strictly in JSON format: {"answer": "A", "explanation": "**Core Concept:** This is why...\\n\\n**Conclusion:** Therefore, A is correct."}`;
 
   const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
     method:'POST',
     headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
     body:JSON.stringify({
-      model: "llama3-8b-8192", // STABLE FAST MODEL
+      model: "llama3-8b-8192", 
       messages: [{ role: "user", content: prompt }],
       temperature: 0,
       response_format: { type: "json_object" }
@@ -475,9 +481,12 @@ $('importJson').onclick=async()=>{
 
 function parseDocumentQuestions(rawText, defaultSubject){
   if(!rawText) throw Error("No text found.");
-  let text = rawText.replace(/\r/g,"\n").replace(/[ \t]+/g," ");
-  text = text.replace(/[ \t]+(?=[A-Da-d][.)][ \t]+\S)/g,"\n");
-  text = text.replace(/[ \t]+(?=(?:Question[ \t]*)?\d{1,4}[.)][ \t]+\S)/gi,"\n");
+  
+  // Better text cleaning to keep paragraph breaks and underlines
+  let text = rawText.replace(/\r/g,"\n");
+  text = text.replace(/[ \t]+/g," ");
+  text = text.replace(/(?=[A-D][.)])/g,"\n"); // Separate options
+  text = text.replace(/(?=(?:Question\s*)?\d{1,4}[.)])/gi,"\n"); // Separate question numbers
   
   const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
   const answerKey = Object.create(null);
@@ -505,24 +514,26 @@ function parseDocumentQuestions(rawText, defaultSubject){
     if(opt){ current.options[opt[1].toUpperCase().charCodeAt(0)-65] = opt[2].trim().substring(0,150); continue; }
     const inlineAnswer = answerLine.exec(line);
     if(inlineAnswer){ current.answer = normAnswer(inlineAnswer[2]); continue; }
+    
+    // If it's not an option, question number, or answer, it's part of the question (e.g., a paragraph)
     current.parts.push(line);
   }
   if(current) questionChunks.push(current);
 
   const imported = [];
   for(const item of questionChunks){
-    if(item.options.length !== 4) continue;
-    
+    // If it's an English question with no options, we still want to import it. 
+    // We will pad the options with empty strings so the app doesn't crash.
     let validOpts = [];
-    for(let k=0; k<4; k++) {
-        if(typeof item.options[k] !== 'string' || !item.options[k].trim()) {
-            validOpts = null; break;
-        }
-        validOpts.push(item.options[k].trim());
+    if (item.options.length === 4 && !item.options.some(o => !o)) {
+        validOpts = item.options.map(o => o.trim());
+    } else {
+        // Fill with placeholders if missing
+        validOpts = ["Option A", "Option B", "Option C", "Option D"]; 
     }
-    if(!validOpts) continue; 
 
     const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
+    // Preserve paragraph breaks by joining with a space or newline
     imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: validOpts, answer: answer, explanation: "", subject: defaultSubject });
   }
   return imported;
@@ -566,7 +577,7 @@ $('uploadFileBtn').onclick = async function() {
     
     for(let i=0; i<data.length; i++){
       let q = data[i];
-      if(!q.question || !Array.isArray(q.options) || q.options.length !== 4) continue;
+      if(!q.question) continue;
       let ref = db.collection('questions').doc();
       
       let cleanObj = {
@@ -606,8 +617,8 @@ $('applyKey').onclick=async()=>{
   let list=questions.filter(q=>q.subject===sub&&(q.setName||'Default Set')===set);
   
   list.sort((a,b) => {
-      let seqA = a.sequence !== undefined ? a.sequence : new Date(a.createdAt || 0).getTime();
-      let seqB = b.sequence !== undefined ? b.sequence : new Date(b.createdAt || 0).getTime();
+      let seqA = a.sequence !== undefined ? Number(a.sequence) : new Date(a.createdAt || 0).getTime();
+      let seqB = b.sequence !== undefined ? Number(b.sequence) : new Date(b.createdAt || 0).getTime();
       return seqA - seqB;
   });
   
@@ -660,23 +671,26 @@ async function startQuiz(type){
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
   
-  if(type==='exam' && list.some(q => q.answer === null || q.answer === undefined)){
-      let ok = confirm("Some questions have no manual answer. Use AI to generate missing answers before the exam starts?");
+  // Check for missing answers (only if options exist or it's a valid question)
+  let missing = list.filter(q => q.answer === null || q.answer === undefined);
+  if(type==='exam' && missing.length > 0){
+      let ok = confirm(`There are ${missing.length} questions without answers. Use AI to generate missing answers before the exam starts?`);
       if(!ok) return;
       
       let key = localStorage.getItem(AI_KEY);
       if(!key) { alert("You need an AI Key to auto-generate answers."); return; }
       
       $('cloudStatus').textContent = "AI is generating missing answers. Please wait...";
-      for(let i=0; i<list.length; i++) {
-          if(list[i].answer === null || list[i].answer === undefined) {
-              $('cloudStatus').textContent = `Generating answers: ${i+1}/${list.length}`;
-              try {
-                  let r = await askAI(list[i]);
-                  list[i].answer = r.answer;
-                  list[i].explanation = r.explanation;
-                  await db.collection('questions').doc(list[i].id).update({answer: r.answer, explanation: r.explanation});
-              } catch(e) { console.log("AI error:", e); }
+      for(let i=0; i<missing.length; i++) {
+          $('cloudStatus').textContent = `Generating answers: ${i+1}/${missing.length}`;
+          try {
+              let r = await askAI(missing[i]);
+              missing[i].answer = r.answer;
+              missing[i].explanation = r.explanation;
+              await db.collection('questions').doc(missing[i].id).update({answer: r.answer, explanation: r.explanation});
+          } catch(e) { 
+              console.log("AI error:", e); 
+              if(i === 0) alert("AI Error: " + e.message + "\n\nSkipping AI generation for this session.");
           }
       }
       $('cloudStatus').textContent = "Questions synced online.";
