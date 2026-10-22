@@ -314,44 +314,53 @@ $('saveAdminAiKey').onclick=()=>{
   }
 };
 
+// IMPROVED AI FUNCTION WITH RETRY LOGIC AND SMART MODEL
 async function askAI(q){
   let key='';
   try{key=localStorage.getItem(AI_KEY)||''}catch(e){}
   if(!key)throw Error('Add your Groq API Key first.');
   
-  // Check if options exist. If not, just ask for the answer and explanation.
   let optionsText = "";
   if(q.options && q.options.length === 4 && !q.options.some(o => !o || o.trim() === '')) {
       optionsText = `\nA) ${q.options[0]}\nB) ${q.options[1]}\nC) ${q.options[2]}\nD) ${q.options[3]}`;
   }
 
-  const prompt = `You are an expert exam grader. Determine the correct answer and provide a highly detailed explanation for the following question. \nUse Markdown formatting to structure your response (use **bold** for key terms, and use bullet points for lists).\n\nQuestion: ${q.question}${optionsText}\n\nRespond strictly in JSON format: {"answer": "A", "explanation": "**Core Concept:** This is why...\\n\\n**Conclusion:** Therefore, A is correct."}`;
+  const prompt = `You are an expert exam grader. Determine the correct answer and provide a detailed explanation for the following question. \nUse Markdown formatting (use **bold** for key terms, and bullet points).\n\nQuestion: ${q.question}${optionsText}\n\nRespond strictly in JSON format: {"answer": "A", "explanation": "**Core Concept:** This is why...\\n\\n**Conclusion:** Therefore, A is correct."}`;
 
-  const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
-    method:'POST',
-    headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
-    body:JSON.stringify({
-      model: "llama3-8b-8192", 
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0,
-      response_format: { type: "json_object" }
-    })
-  });
-  
-  let data;
-  try{data=await res.json()}catch(e){throw Error('AI returned an unreadable response.')}
-  if(!res.ok||data.error)throw Error((data.error&&data.error.message)||('Groq request failed ('+res.status+').'));
-  
-  let content=data.choices[0].message.content.trim();
-  let parsed;
-  try{parsed=JSON.parse(content)}catch(e){
-    let m=content.match(/\b(?:answer\s*[:=]?\s*)?([A-D])\b/i);
-    if(!m)throw Error('AI response did not contain a valid answer. Try again.');
-    parsed={answer:m[1],explanation:content}
+  // Retry logic (Tries 2 times before failing)
+  for(let attempt = 1; attempt <= 2; attempt++) {
+      try {
+          const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+            body:JSON.stringify({
+              model: "llama-3.3-70b-versatile", // Smarter and more reliable model
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0,
+              response_format: { type: "json_object" }
+            })
+          });
+          
+          let data;
+          try{data=await res.json()}catch(e){throw Error('Unreadable response.')}
+          if(!res.ok||data.error)throw Error((data.error&&data.error.message)||('Groq request failed ('+res.status+').'));
+          
+          let content=data.choices[0].message.content.trim();
+          let parsed;
+          try{parsed=JSON.parse(content)}catch(e){
+            let m=content.match(/\b(?:answer\s*[:=]?\s*)?([A-D])\b/i);
+            if(!m)throw Error('AI did not return a valid answer.');
+            parsed={answer:m[1],explanation:content}
+          }
+          let answer=normAnswer(parsed.answer);
+          if(answer===null)throw Error('AI did not return A, B, C, or D.');
+          return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
+          
+      } catch(e) {
+          if(attempt === 2) throw e; // If the 2nd try fails, throw the error
+          await new Promise(resolve => setTimeout(resolve, 1500)); // Wait 1.5s before retrying
+      }
   }
-  let answer=normAnswer(parsed.answer);
-  if(answer===null)throw Error('AI did not return A, B, C, or D.');
-  return {answer,explanation:String(parsed.explanation||'AI-generated explanation.')}
 }
 
 function formatExplanation(text) {
@@ -390,7 +399,8 @@ $('bulkGenerateBtn').onclick = async function() {
         } catch(e) {
             console.error("Failed on question", missing[i].id, e);
         }
-        await new Promise(resolve => setTimeout(resolve, 300)); 
+        // Wait 2.5 seconds between questions to avoid Groq Rate Limits
+        await new Promise(resolve => setTimeout(resolve, 2500)); 
     }
     
     $('bulkGenStatus').textContent = `✅ Finished! Generated ${success} answers out of ${missing.length}.`;
@@ -482,11 +492,10 @@ $('importJson').onclick=async()=>{
 function parseDocumentQuestions(rawText, defaultSubject){
   if(!rawText) throw Error("No text found.");
   
-  // Better text cleaning to keep paragraph breaks and underlines
   let text = rawText.replace(/\r/g,"\n");
   text = text.replace(/[ \t]+/g," ");
-  text = text.replace(/(?=[A-D][.)])/g,"\n"); // Separate options
-  text = text.replace(/(?=(?:Question\s*)?\d{1,4}[.)])/gi,"\n"); // Separate question numbers
+  text = text.replace(/(?=[A-D][.)])/g,"\n"); 
+  text = text.replace(/(?=(?:Question\s*)?\d{1,4}[.)])/gi,"\n"); 
   
   const lines = text.split("\n").map(s => s.trim()).filter(Boolean);
   const answerKey = Object.create(null);
@@ -515,25 +524,23 @@ function parseDocumentQuestions(rawText, defaultSubject){
     const inlineAnswer = answerLine.exec(line);
     if(inlineAnswer){ current.answer = normAnswer(inlineAnswer[2]); continue; }
     
-    // If it's not an option, question number, or answer, it's part of the question (e.g., a paragraph)
     current.parts.push(line);
   }
   if(current) questionChunks.push(current);
 
   const imported = [];
   for(const item of questionChunks){
-    // If it's an English question with no options, we still want to import it. 
-    // We will pad the options with empty strings so the app doesn't crash.
+    // Fill missing options with placeholders if it's a reading question
     let validOpts = [];
-    if (item.options.length === 4 && !item.options.some(o => !o)) {
-        validOpts = item.options.map(o => o.trim());
-    } else {
-        // Fill with placeholders if missing
-        validOpts = ["Option A", "Option B", "Option C", "Option D"]; 
+    for(let k=0; k<4; k++) {
+        if(typeof item.options[k] === 'string' && item.options[k].trim() !== '') {
+            validOpts.push(item.options[k].trim());
+        } else {
+            validOpts.push(`Option ${String.fromCharCode(65+k)}`); 
+        }
     }
 
     const answer = Object.prototype.hasOwnProperty.call(answerKey,item.number) ? answerKey[item.number] : item.answer;
-    // Preserve paragraph breaks by joining with a space or newline
     imported.push({ question: item.parts.join(" ").replace(/\s+/g," ").trim(), options: validOpts, answer: answer, explanation: "", subject: defaultSubject });
   }
   return imported;
@@ -671,10 +678,9 @@ async function startQuiz(type){
   if(limit>0)list=list.slice(0,limit);
   if(!list.length){alert('No questions match your filters.');return}
   
-  // Check for missing answers (only if options exist or it's a valid question)
   let missing = list.filter(q => q.answer === null || q.answer === undefined);
   if(type==='exam' && missing.length > 0){
-      let ok = confirm(`There are ${missing.length} questions without answers. Use AI to generate missing answers before the exam starts?`);
+      let ok = confirm(`There are ${missing.length} questions without answers. Use AI to generate missing answers before the exam starts? (This may take a minute)`);
       if(!ok) return;
       
       let key = localStorage.getItem(AI_KEY);
@@ -692,6 +698,8 @@ async function startQuiz(type){
               console.log("AI error:", e); 
               if(i === 0) alert("AI Error: " + e.message + "\n\nSkipping AI generation for this session.");
           }
+          // Wait 2.5s to prevent Rate Limits
+          await new Promise(resolve => setTimeout(resolve, 2500));
       }
       $('cloudStatus').textContent = "Questions synced online.";
   }
